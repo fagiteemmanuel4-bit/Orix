@@ -201,7 +201,6 @@ Orix is open-source software licensed under the **MIT License**. See the `LICENS
 ## 🏢 Contact
 
 * **Maintained By:** Kryonara Engineering Team
-* **Official Website:** [kryonara.com](https://www.google.com/search?q=https://kryonara.com)
 * **GitHub Repository:** [fagiteemmanuel4-bit/Orix]()
 
 ```
