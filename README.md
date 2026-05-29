@@ -1,129 +1,82 @@
-# Orix
+import os
+import sys
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+from rich.align import Align
 
-> Orix — a lightweight, production-ready Python toolkit for [describe problem domain].
+# Initialize the global Kryonara rich console
+console = Console()
 
----
+def clear_terminal() -> None:
+    """Clears the terminal screen completely for a clean UI environment."""
+    os.system("cls" if os.name == "nt" else "clear")
 
-## Table of Contents
-- [Overview](#overview)
-- [Key Features](#key-features)
-- [Quick Start](#quick-start)
-- [Usage](#usage)
-- [Configuration](#configuration)
-- [Development](#development)
-- [Testing](#testing)
-- [Contributing](#contributing)
-- [Security](#security)
-- [License](#license)
-- [Contact](#contact)
+def display_welcome_banner() -> None:
+    """
+    Renders the premium Kryonara-themed Orix ASCII welcome banner.
+    Designed with precise string escapes to prevent alignment drifting.
+    """
+    clear_terminal()
 
----
+    # Highly stable stylized ASCII art block
+    ascii_art = (
+        r"   ____         _       " "\n"
+        r"  / __ \_______(_)  __  " "\n"
+        r" / / / / __/ __/ / |/_/  " "\n"
+        r"/ /_/ / / / / / />  <    " "\n"
+        r"\____/_/ /_/ /_/_/|_|    " "\n"
+    )
 
-## Overview
+    # Apply a sleek deep-purple to magenta gradient to the ASCII branding
+    banner_text = Text(ascii_art, style="bold matrix")
+    banner_text.stylize_gradient("bright_purple", "magenta")
 
-Provide a short, persuasive summary of the project: what it does, who it's for, and why it matters. Include high-level architecture or technology choices if relevant.
+    # Taglines and metadata
+    tagline = Text("\n⚡ LIGHTWEIGHT MULTI-FRAMEWORK PROJECT SCAFFOLDER ⚡", style="bold white")
+    meta_info = Text("Engineered by Kryonara • Version 1.0.0", style="dim italic cyan")
 
-Example:
+    # Combine text items vertically
+    combined_content = Text.assemble(banner_text, tagline, "\n", meta_info)
+    
+    # Align content to the center of the panel
+    centered_content = Align.center(combined_content)
 
-This repository contains the core implementation of `Orix`, a maintainable Python package that provides tools and utilities for [problem domain]. It is built for clarity, testability, and ease of integration in Python 3.10+ environments.
+    # Render a clean, heavy-bordered panel to act as the viewport frame
+    viewport_panel = Panel(
+        centered_content,
+        border_style="bright_purple",
+        padding=(1, 4),
+        subtitle="[bold reverse white] HUMAN & AI CHANNELS ACTIVE [/bold reverse white]",
+        subtitle_align="right"
+    )
 
-## Key Features
+    console.print(viewport_panel)
+    console.print("\n")
 
-- Clear, concise feature bullet 1 — what it solves.
-- Performance or scale-related bullet 2.
-- Developer ergonomics or DX bullet 3.
-- Integration points / APIs / portability bullet 4.
+def display_success_message(project_name: str, path: str) -> None:
+    """Prints a beautiful, structural success report when a project finishes scaffolding."""
+    success_text = Text()
+    success_text.append("\n✨ Project Scaffolding Complete!\n\n", style="bold green")
+    success_text.append("🚀 Project Name: ", style="bold white")
+    success_text.append(f"{project_name}\n", style="cyan")
+    success_text.append("📂 Location:     ", style="bold white")
+    success_text.append(f"{path}\n\n", style="cyan")
+    success_text.append("To get started, execute the following commands:\n", style="dim white")
+    
+    # Render the copy-paste action block
+    console.print(Panel(success_text, border_style="green", title="[bold green]SUCCESS[/bold green]", title_align="left"))
+    
+    action_panel = Panel(
+        f"[bold magenta]cd[/bold magenta] {project_name}\n"
+        f"[bold magenta]docker-compose[/bold magenta] up --build",
+        border_style="dim white",
+        title="[dim]Quickstart Command[/dim]",
+        title_align="left"
+    )
+    console.print(action_panel)
 
-## Quick Start
-
-Prerequisites:
-
-- Python 3.10 or newer
-- `pip` and `virtualenv` or `venv`
-
-Installation and run:
-
-1. Clone the repo
-
-```bash
-git clone https://github.com/fagiteemmanuel4-bit/Orix.git
-cd Orix/Orix
-```
-
-2. Create a virtual environment and install the package
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
-
-3. Run the main module or show help
-
-```bash
-python orix.py --help
-```
-
-## Usage
-
-Describe common workflows and show example commands, API requests, or screenshots. Favor small, copy-pastable examples.
-
-Example CLI usage:
-
-```bash
-# Run a task
-./bin/run --input data/example.json
-```
-
-Example HTTP request:
-
-```bash
-curl -X POST https://api.example.com/v1/do-stuff \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"key":"value"}'
-```
-
-## Configuration
-
-List environment variables, configuration files, and recommended defaults. Provide secure handling notes for secrets.
-
-- `ENV_VAR_NAME` — description (default: `value`)
-
-## Development
-
-Explain how contributors should set up a local dev environment, run linters, formatters, and start a development server.
-
-```bash
-# tests + lint
-npm test
-npm run lint
-```
-
-## Testing
-
-Document unit, integration, and end-to-end testing strategies and how to run them locally and in CI.
-
-```bash
-npm test
-```
-
-## Contributing
-
-State contribution guidelines, code of conduct link, and how to submit issues and pull requests. Be explicit about expectations for tests, linters, and commit message format.
-
-## Security
-
-Explain how to report security vulnerabilities and provide a secure contact email or link. Optionally include a brief note about dependency scanning and secret handling.
-
-## License
-
-State the license (e.g., MIT, Apache-2.0). If you have a `LICENSE` file, reference it here.
-
-## Contact
-
-Provide maintainer or team contact info and links to documentation or additional resources.
-
----
-
-Replace placeholder sections (like `Project Title`, prerequisites, and examples) with project-specific details to maximize clarity and credibility.
+if __name__ == "__main__":
+    # Test execution layout locally
+    display_welcome_banner()
+    display_success_message("my-premium-app", "./workspaces/my-premium-app")
