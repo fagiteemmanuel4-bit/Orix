@@ -37,6 +37,18 @@ def create(project_name, framework, docker, auth):
 
     plugin = orchestrator.plugin_manager.get_plugin_by_name(framework)
     
+<<<<<<< HEAD
+    options = {}
+    if docker is not None:
+        options["docker"] = docker
+    if auth is not None:
+        options["auth"] = auth
+    
+    # If interactive and options not provided via flags, prompt for them
+    if not any(options.values()) and project_name:
+        questions = plugin.get_questions()
+        options = TUI.prompt_options(questions)
+=======
     options = {
         "docker": docker,
         "auth": auth
@@ -50,6 +62,7 @@ def create(project_name, framework, docker, auth):
         if remaining_questions:
             new_options = TUI.prompt_options(remaining_questions)
             options.update(new_options)
+>>>>>>> origin/main
 
     with console.status(f"[bold green]Generating {framework} project: {project_name}..."):
         try:
