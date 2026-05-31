@@ -1,0 +1,6 @@
+fastapi=={{ fastapi_version }}
+uvicorn[standard]==0.21.1
+{% if use_auth %}
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+{% endif %}
