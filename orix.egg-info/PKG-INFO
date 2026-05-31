@@ -1,0 +1,88 @@
+Metadata-Version: 2.4
+Name: orix
+Version: 2.0.0
+Summary: Orix X: Universal Project Generator
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: click>=8.0.0
+Requires-Dist: rich>=12.0.0
+Requires-Dist: questionary>=1.10.0
+Requires-Dist: jinja2>=3.0.0
+Requires-Dist: textual>=0.10.0
+
+# 🌌 Orix X
+
+```identity
+   ____         _       
+  / __ \_______(_)  __  
+ / / / / __/ __/ / |/_/  
+/ /_/ / / / / / />  <    
+\____/_/ /_/ /_/_/|_|    
+                         
+⚡ UNIVERSAL PROJECT GENERATION PLATFORM ⚡
+       Engineered by Kryonara • Version 2.0.0
+```
+
+> **Orix X** is a modular, plugin-based universal project generation platform. It is designed to be highly scalable, allowing developers to easily add support for new frameworks and tools via a robust Plugin SDK.
+
+---
+
+## 🚀 Key Features
+
+* 🔌 **Plugin-Based Architecture:** Extendable through a clean SDK for Frameworks, Databases, and DevOps tools.
+* 🏗️ **Modular Core:** Separated Template Rendering, Plugin Management, and Orchestration logic.
+* 🎨 **Enhanced TUI:** A rich, interactive terminal UI powered by `rich` and `questionary`.
+* 🤖 **Deterministic AI Interface:** Full CLI flag support for seamless automation and AI agent integration.
+* 📦 **Production Ready:** Generates clean, dockerized, and auth-ready templates.
+
+---
+
+## 🛠️ Architecture
+
+Orix X follows a modular structure:
+
+- **`orix/core`**: The engine responsible for orchestration, plugin loading, and template rendering.
+- **`orix/sdk`**: The standard toolkit for building plugins.
+- **`orix/plugins`**: Modular components for different frameworks (React, Django, FastAPI).
+- **`orix/templates`**: Jinja2-powered templates for recursive directory generation.
+
+---
+
+## 📦 Installation
+
+```bash
+# Install in editable mode for development
+pip install -e .
+```
+
+---
+
+## 🚀 Usage
+
+### Interactive Mode (Human-friendly)
+
+```bash
+orix create
+```
+
+### Deterministic Mode (AI/Automation-friendly)
+
+```bash
+orix create my-project --framework react --docker --auth
+```
+
+---
+
+## 🧪 Development
+
+### Running Tests
+
+```bash
+pytest
+```
+
+---
+
+## 📄 License
+
+Orix X is open-source software licensed under the **MIT License**.

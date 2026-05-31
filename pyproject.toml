@@ -1,0 +1,20 @@
+[project]
+name = "orix"
+version = "2.0.0"
+description = "Orix X: Universal Project Generator"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0.0",
+    "rich>=12.0.0",
+    "questionary>=1.10.0",
+    "jinja2>=3.0.0",
+    "textual>=0.10.0",
+]
+
+[project.scripts]
+orix = "orix.core.cli:cli"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
