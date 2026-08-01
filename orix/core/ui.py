@@ -8,15 +8,15 @@ console = Console()
 class TUI:
     @staticmethod
     def display_banner():
-        banner = """
-   ____         _       
-  / __ \_______(_)  __  
- / / / / __/ __/ / |/_/  
-/ /_/ / / / / / />  <    
-\____/_/ /_/ /_/_/|_|    
-                         
-⚡ Orix X: Universal Project Generator ⚡
-        """
+        banner = (
+            "   ____         _       \n"
+            "  / __ \\_______(_)  __  \n"
+            " / / / / __/ __/ / |/_/  \n"
+            "/ /_/ / / / / / />  <    \n"
+            "\\____/_/ /_/ /_/_/|_|    \n"
+            "                         \n"
+            "⚡ Orix X: Universal Project Generator ⚡"
+        )
         console.print(Panel(banner, style="bold cyan"))
 
     @staticmethod
