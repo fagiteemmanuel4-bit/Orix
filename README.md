@@ -7,58 +7,59 @@
 / /_/ / / / / / />  <    
 \____/_/ /_/ /_/_/|_|    
 
-⚡ UNIVERSAL PROJECT GENERATION PLATFORM ⚡
-       Engineered by Kryonara • Version 2.0.0
+⚡ UNIVERSAL PROJECT GENERATION ENGINE & SCAFFOLDING PLATFORM ⚡
+            Engineered by Kryonara • Version 2.0.0
 ```
 
-**Orix X** is a plugin-based CLI that scaffolds production-ready project boilerplate in seconds. Instead of hardcoding a generator for every stack, Orix loads framework support as plugins at runtime, renders Jinja2 templates into a target directory, and gives you a clean starting point — optionally with Docker and auth wired in.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://python.org)
+[![Testing](https://img.shields.io/badge/Tests-Passing-green.svg)](tests/)
 
-It's built to be driven by humans (interactive prompts) or by automation/AI agents (deterministic CLI flags) — making it equally useful as a personal scaffolding tool or as a building block in larger agentic dev workflows.
+**Orix X** is an enterprise-grade, plugin-driven CLI application designed to scaffold modern, production-ready, security-hardened project structures in seconds. By decoupling the core generation engine from framework templates, Orix X operates on a runtime plugin architecture that dynamically detects, registers, and loads framework generation logic without requiring manual changes to the core system.
+
+Orix X is optimized for both human development workflows (using rich, interactive Terminal User Interfaces) and automated/AI agentic pipelines (utilizing deterministic, non-interactive CLI flags).
 
 ---
 
 ## 🚀 Key Features
 
-- **Plugin-based architecture** — Each framework (React, Django, FastAPI) is a self-contained plugin built on a shared SDK (`BasePlugin` / `FrameworkPlugin`). Adding a new framework means writing a new plugin, not touching the core.
-- **Modular core engine** — Orchestration, plugin discovery, and template rendering are fully decoupled (`Orchestrator`, `PluginManager`, `TemplateRenderer`).
-- **Interactive TUI** — A `rich` + `questionary` powered terminal experience: banner, framework picker, and dynamic per-framework option prompts.
-- **Deterministic CLI mode** — Every interactive choice has a CLI flag equivalent, so the entire tool can be scripted or called by an AI agent without any prompts.
-- **Recursive Jinja2 templating** — Templates support placeholders in file contents, file names, and directory names, rendered recursively into the generated project.
-- **Auto-loaded plugins** — Drop a new plugin file into `orix/plugins/`, and `PluginManager` discovers and loads it automatically via introspection — no manual registration step.
+* **🔌 Decoupled Plugin Architecture**: Dynamically registers framework plugins (`React`, `Django`, `FastAPI`) via standard class inspection. Adding support for a new framework requires no changes to core logic.
+* **⚡ Interactive TUI & Non-Interactive CLI**: Seamlessly switches between a gorgeous TUI powered by `rich` and `questionary`, and a fast, scriptable, agent-friendly deterministic mode.
+* **🔧 Recursive Jinja2 Template Engine**: Supports variable replacement inside file contents, filenames, and nested directory paths.
+* **🛡️ Security-First Defaults**: Standard generation includes secure-entropy secret keys and robust, isolated Docker configurations.
+* **🧪 Test-Driven & Standardized**: Features high-fidelity unit and integration test suites, alongside comprehensive open-source contributing, security, and governance models.
 
 ---
 
-## 🛠️ Architecture
+## 🛠️ Architecture Overview
 
 ```
 orix/
 ├── core/
-│   ├── cli.py             # Click-based CLI entrypoint (orix create)
-│   ├── orchestrator.py    # Wires plugins + renderer together, drives generation
-│   ├── plugin_manager.py  # Discovers and loads plugins from orix/plugins/
+│   ├── cli.py             # Click CLI commands (orix create, list)
+│   ├── orchestrator.py    # Main orchestration pipeline
+│   ├── plugin_manager.py  # Runtime dynamic plugin discovery & introspection
 │   ├── renderer.py        # Recursive Jinja2 template renderer
-│   └── ui.py               # TUI: banner, prompts (rich + questionary)
+│   └── ui.py              # High-fidelity TUI prompts (rich + questionary)
 ├── sdk/
-│   └── base.py             # BasePlugin / FrameworkPlugin abstract classes
+│   └── base.py            # BasePlugin & FrameworkPlugin SDK contracts
 ├── plugins/
-│   ├── react.py            # React framework plugin
-│   ├── django.py           # Django framework plugin
-│   └── fastapi.py          # FastAPI framework plugin
+│   ├── react.py           # React template plugin module
+│   ├── django.py          # Django template plugin module
+│   └── fastapi.py         # FastAPI template plugin module
 └── templates/
-    ├── react/               # React project template
-    ├── django/              # Django project template
-    └── fastapi/             # FastAPI project template
+    ├── react/             # React boilerplate files & configs
+    ├── django/            # Django project structure & configuration
+    └── fastapi/           # FastAPI app setup & requirements
 ```
-
-**How it works under the hood:**
-1. `PluginManager` scans `orix/plugins/`, dynamically imports every module, and registers any class that subclasses `BasePlugin`.
-2. `cli.py` lists the available frameworks and, in interactive mode, prompts you to pick one and answer its `get_questions()` (e.g. "Include Docker?").
-3. `Orchestrator.generate()` builds a context dict from your project name + answers + the plugin's `get_context()` output (e.g. Django gets an auto-generated `secret_key`).
-4. `TemplateRenderer` walks the matching template folder under `orix/templates/`, rendering directory names, file names, and file contents through Jinja2, and writes the result to your target folder.
 
 ---
 
-## 📦 Installation
+## 📦 Installation & Setup
+
+Ensure you have **Python 3.10+** installed on your system.
+
+### Install from Source (Development Mode)
 
 ```bash
 git clone https://github.com/fagiteemmanuel4-bit/Orix.git
@@ -66,68 +67,91 @@ cd Orix
 pip install -e .
 ```
 
-Requires Python 3.10+.
+### Running Tests
+
+To verify your installation and environment, run the standard test suite:
+
+```bash
+python3 -m pytest
+```
 
 ---
 
-## 🚀 Usage
+## 🚀 Usage Guide
 
-### Interactive mode (human-friendly)
+Orix X can be run in **interactive mode** for humans or **deterministic mode** for scripts and AI agents.
+
+### 1. Interactive Mode (TUI)
+
+Simply type `orix create` without any positional arguments to trigger the high-fidelity wizard:
 
 ```bash
 orix create
 ```
 
-You'll get the Orix banner, a framework picker, and prompts for any options the chosen framework supports (Docker, auth, etc).
+This will display the official Orix X banner, prompt you for a project name, show an interactive framework selector, and display multi-select configuration options (e.g. including Docker, enabling Authentication).
 
-### Deterministic mode (scriptable / AI-agent-friendly)
+### 2. Deterministic Mode (Script / AI Agent)
+
+Pass configuration options as standard CLI arguments to bypass prompts:
 
 ```bash
-orix create my-project --framework react --docker --auth
+orix create my-enterprise-api --framework fastapi --docker --auth
 ```
 
-All flags can be mixed — anything you don't pass will fall back to an interactive prompt for that option.
+All flags are fully decoupled and can be combined:
 
-**Supported flags:**
-
-| Flag | Description |
-|---|---|
-| `project_name` | Name of the project / output folder (positional, optional) |
-| `--framework` | One of: `react`, `django`, `fastapi` |
-| `--docker` / `--no-docker` | Include Docker configuration |
-| `--auth` / `--no-auth` | Include auth boilerplate (JWT for FastAPI, DRF auth for Django, auth scaffolding for React) |
+| Flag / Option | Type | Description |
+|---|---|---|
+| `project_name` | Positional | The output directory name |
+| `--framework` | Option | Framework plugin to load (`react`, `django`, `fastapi`) |
+| `--docker` / `--no-docker` | Flag | Toggle multi-stage Docker environment configurations |
+| `--auth` / `--no-auth` | Flag | Toggle framework-specific authentication boilerplate |
+| `--dry-run` | Flag | Print generation paths and variables without writing to disk |
 
 ---
 
-## 🔌 Currently Supported Frameworks
+## 🔌 Currently Supported Scaffolds
 
-| Framework | Docker | Auth |
-|---|---|---|
-| React | ✅ | ✅ |
-| Django | ✅ | ✅ (DRF) |
-| FastAPI | ✅ | ✅ (JWT) |
+| Scaffold Plugin | Docker Setup | Auth Boilerplate | Features Included |
+|---|---|---|---|
+| **React** | ✅ Included | ✅ Ready | Standard setup, modern React Router structure |
+| **Django** | ✅ Included | ✅ Rest Framework | Auto-generated secure tokens, ready-to-run settings |
+| **FastAPI** | ✅ Included | ✅ JWT-based | Standard dependency injection, routers, requirements |
 
 ---
 
 ## 🧩 Writing Your Own Plugin
 
-Orix is designed so new framework support doesn't require touching the core. To add one:
+Orix X's plugin-loader automatically discovers and integrates custom plugins without editing any central configuration files.
 
-1. Create `orix/plugins/<name>.py` with a class extending `FrameworkPlugin` from `orix.sdk.base`.
-2. Implement `name`, `get_template_name()`, `get_questions()`, and `get_context()`.
-3. Add a matching template folder under `orix/templates/<name>/` using Jinja2 placeholders for any dynamic content, file names, or folders.
-4. Drop it in — `PluginManager` will discover it automatically on the next run.
+1. **Create Python Plugin**: Create `orix/plugins/<your_framework>.py` inheriting from `FrameworkPlugin`:
+   ```python
+   from orix.sdk.base import FrameworkPlugin
+
+   class MyFrameworkPlugin(FrameworkPlugin):
+       @property
+       def name(self): return "custom-fw"
+       def get_template_name(self): return "custom-fw"
+       def get_questions(self): return []
+       def get_context(self, answers): return {}
+   ```
+2. **Add Templates**: Create a matching folder inside `orix/templates/custom-fw/`. Use standard `{{ project_name }}` placeholders in folder/file names and file contents.
+3. **Execute**: Run `orix create` and your custom scaffold will be dynamically loaded and listed inside the TUI selection list.
 
 ---
 
-## 🧪 Development
+## 🤝 Contributing, Governance & Code of Conduct
 
-```bash
-pytest
-```
+We welcome all community contributions. Please refer to our core open-source documents:
+- **[Contributing Guidelines](CONTRIBUTING.md)**: Steps to write tests, design plugins, and submit PRs.
+- **[Code of Conduct](CODE_OF_CONDUCT.md)**: Core community rules.
+- **[Security Policy](SECURITY.md)**: Standard security reporting guidelines.
+- **[Governance Model](GOVERNANCE.md)**: Decision-making roles and steer committee paths.
+- **[Changelog](CHANGELOG.md)**: Full release and update history.
 
 ---
 
 ## 📄 License
 
-Orix X is open-source software licensed under the **MIT License**.
+Orix X is open-source software distributed under the **MIT License**.

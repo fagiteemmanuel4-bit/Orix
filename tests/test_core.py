@@ -55,3 +55,22 @@ def test_orchestrator_integration(tmp_path):
     assert os.path.exists(path)
     assert os.path.exists(os.path.join(path, "package.json"))
     assert os.path.exists(os.path.join(path, "src", "App.js"))
+
+def test_cli_list_command():
+    from click.testing import CliRunner
+    from orix.core.cli import cli
+    runner = CliRunner()
+    result = runner.invoke(cli, ["list"])
+    assert result.exit_code == 0
+    assert "django" in result.output
+    assert "react" in result.output
+    assert "fastapi" in result.output
+
+def test_cli_dry_run_silent():
+    from click.testing import CliRunner
+    from orix.core.cli import cli
+    runner = CliRunner()
+    result = runner.invoke(cli, ["create", "dummy-proj", "--framework", "fastapi", "--dry-run", "--silent"])
+    assert result.exit_code == 0
+    assert "[DRY-RUN]" in result.output
+    assert "fastapi" in result.output
