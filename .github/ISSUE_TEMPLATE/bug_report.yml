@@ -1,0 +1,31 @@
+name: Bug Report
+description: File a bug report to help us improve Orix X
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thank you for reporting a bug! Please fill out the sections below.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description of the Bug
+      placeholder: Provide a clear and concise description of the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction Steps
+      placeholder: |
+        1. Run `orix create my-project ...`
+        2. Select framework ...
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Terminal Output & Logs
+      placeholder: Paste any error messages or tracebacks here.
+    validations:
+      required: false

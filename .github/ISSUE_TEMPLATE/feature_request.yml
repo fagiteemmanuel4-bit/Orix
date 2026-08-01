@@ -1,0 +1,18 @@
+name: Feature Request
+description: Propose a new feature, plugin, or enhancement for Orix X
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: details
+    attributes:
+      label: Feature Description
+      placeholder: Describe the feature you would like to see added.
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case & Motivation
+      placeholder: Why is this feature needed? How does it improve developer experience?
+    validations:
+      required: true
