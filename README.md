@@ -7,13 +7,13 @@
 / /_/ / / / / / />  <    
 \____/_/ /_/ /_/_/|_|    
 
-⚡ UNIVERSAL PROJECT GENERATION PLATFORM ⚡
-       Engineered by Kryonara • Version 2.0.0
+⚡ UNIVERSAL DEVELOPER CLI PLATFORM ⚡
+       Version 2.0.0
 ```
 
-**Orix X** is a plugin-based CLI that scaffolds production-ready project boilerplate in seconds. Instead of hardcoding a generator for every stack, Orix loads framework support as plugins at runtime, renders Jinja2 templates into a target directory, and gives you a clean starting point — optionally with Docker and auth wired in.
+**Orix X** is an independent, plugin-driven CLI designed to bootstrap apps and infrastructure faster than traditional generators. Instead of hardcoding every stack, Orix loads framework support as plugins at runtime, renders Jinja2 templates into a target folder, and delivers production-ready boilerplate — including Docker, auth, CI, and environment diagnostics.
 
-It's built to be driven by humans (interactive prompts) or by automation/AI agents (deterministic CLI flags) — making it equally useful as a personal scaffolding tool or as a building block in larger agentic dev workflows.
+Orix is built for developers, automation, and AI agents. It supports interactive prompts, deterministic CLI flags, and YAML spec files, so it works like `git`, `npm`, `gh`, `cargo`, or `nx` in modern workflows.
 
 ---
 
@@ -21,10 +21,11 @@ It's built to be driven by humans (interactive prompts) or by automation/AI agen
 
 - **Plugin-based architecture** — Each framework (React, Django, FastAPI) is a self-contained plugin built on a shared SDK (`BasePlugin` / `FrameworkPlugin`). Adding a new framework means writing a new plugin, not touching the core.
 - **Modular core engine** — Orchestration, plugin discovery, and template rendering are fully decoupled (`Orchestrator`, `PluginManager`, `TemplateRenderer`).
-- **Interactive TUI** — A `rich` + `questionary` powered terminal experience: banner, framework picker, and dynamic per-framework option prompts.
-- **Deterministic CLI mode** — Every interactive choice has a CLI flag equivalent, so the entire tool can be scripted or called by an AI agent without any prompts.
-- **Recursive Jinja2 templating** — Templates support placeholders in file contents, file names, and directory names, rendered recursively into the generated project.
-- **Auto-loaded plugins** — Drop a new plugin file into `orix/plugins/`, and `PluginManager` discovers and loads it automatically via introspection — no manual registration step.
+- **Interactive TUI** — A `rich` + `questionary` terminal experience that feels polished and approachable.
+- **Deterministic CLI mode** — Every prompt option is also available as a flag, so AI agents and scripts can generate projects non-interactively.
+- **Spec-driven generation** — Use YAML specs for repeatable, audit-friendly project creation.
+- **Recursive Jinja2 templating** — Render placeholders in file contents, file names, and directory names across entire project trees.
+- **Auto-loaded plugins** — Drop a new plugin into `orix/plugins/` and `PluginManager` discovers it automatically, with no core changes required.
 
 ---
 
@@ -86,6 +87,15 @@ You'll get the Orix banner, a framework picker, and prompts for any options the 
 orix create my-project --framework react --docker --auth
 ```
 
+Orix is designed to be called directly from automation and AI tools. Use exact flags or a YAML spec to make scaffolding reproducible and agent-ready.
+
+```bash
+orix create --spec orix.yaml
+orix plugin_install https://github.com/your-org/orix-react-plugin.git
+orix diagnose
+orix ai_build
+```
+
 All flags can be mixed — anything you don't pass will fall back to an interactive prompt for that option.
 
 **Supported flags:**
@@ -96,6 +106,20 @@ All flags can be mixed — anything you don't pass will fall back to an interact
 | `--framework` | One of: `react`, `django`, `fastapi` |
 | `--docker` / `--no-docker` | Include Docker configuration |
 | `--auth` / `--no-auth` | Include auth boilerplate (JWT for FastAPI, DRF auth for Django, auth scaffolding for React) |
+| `--spec` | Path to a YAML spec file, making generation repeatable |
+| `--output` | Output folder / path for generated project |
+
+---
+
+## 🤖 AI Builder
+
+Orix can use an AI model to generate a scaffold spec automatically. Provide an OpenRouter/OpenAI-compatible endpoint and API key, then describe the app you want to build.
+
+```bash
+orix ai_build
+```
+
+The AI builder writes `orix_ai_spec.yaml` and generates a project from the returned spec. All payment and model access is handled by the user.
 
 ---
 

@@ -1,4 +1,5 @@
 import os
+import yaml
 from typing import Dict, Any, List
 from orix.core.renderer import TemplateRenderer
 from orix.core.plugin_manager import PluginManager
@@ -9,10 +10,12 @@ class Orchestrator:
         self.plugin_manager = PluginManager(plugins_dir)
         self.plugin_manager.load_plugins()
 
-    def generate(self, project_name: str, framework_name: str, options: Dict[str, Any]):
-        target_path = os.path.join(os.getcwd(), project_name)
+    def generate(self, target_path: str, framework_name: str, options: Dict[str, Any]):
+        if not os.path.isabs(target_path):
+            target_path = os.path.join(os.getcwd(), target_path)
+
         if not os.path.exists(target_path):
-            os.makedirs(target_path)
+            os.makedirs(target_path, exist_ok=True)
 
         framework_plugin = self.plugin_manager.get_plugin_by_name(framework_name)
         if not framework_plugin:
@@ -20,7 +23,7 @@ class Orchestrator:
 
         # Build context
         context = {
-            "project_name": project_name,
+            "project_name": os.path.basename(target_path),
             **options
         }
         
@@ -33,3 +36,7 @@ class Orchestrator:
         self.renderer.render_project(template_name, target_path, context)
         
         return target_path
+
+    def load_spec(self, spec_path: str) -> Dict[str, Any]:
+        with open(spec_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)

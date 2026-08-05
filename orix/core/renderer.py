@@ -15,26 +15,32 @@ class TemplateRenderer:
         for root, dirs, files in os.walk(template_path):
             # Calculate relative path from template root
             rel_path = os.path.relpath(root, template_path)
-            
+
             # Render directory name if it contains placeholders
             rendered_rel_path = self._render_string(rel_path, context)
+            # Treat current dir marker as root
+            if rendered_rel_path in (".", os.curdir):
+                rendered_rel_path = ""
+
             dest_dir = os.path.join(target_path, rendered_rel_path)
-            
             if not os.path.exists(dest_dir):
-                os.makedirs(dest_dir)
+                os.makedirs(dest_dir, exist_ok=True)
 
             for file in files:
                 # Render filename if it contains placeholders
                 rendered_filename = self._render_string(file, context)
                 dest_file_path = os.path.join(dest_dir, rendered_filename)
-                
-                template_file_rel_path = os.path.join(rel_path, file)
-                if template_file_rel_path.startswith("./"):
-                    template_file_rel_path = template_file_rel_path[2:]
-                
-                template = self.env.get_template(os.path.join(template_name, template_file_rel_path))
+
+                # Build template-relative path using POSIX separators for Jinja2
+                if rel_path in (".", os.curdir):
+                    template_file_rel_path = file
+                else:
+                    template_file_rel_path = os.path.join(rel_path, file).replace(os.path.sep, '/')
+
+                template_lookup_name = f"{template_name}/{template_file_rel_path}" if template_file_rel_path else template_name
+                template = self.env.get_template(template_lookup_name)
                 content = template.render(context)
-                
+
                 with open(dest_file_path, "w") as f:
                     f.write(content)
 

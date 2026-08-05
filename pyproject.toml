@@ -1,6 +1,6 @@
 [project]
 name = "orix"
-version = "2.0.0"
+version = "3.1.0"
 description = "Orix X: Universal Project Generator"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -9,6 +9,11 @@ dependencies = [
     "rich>=12.0.0",
     "questionary>=1.10.0",
     "jinja2>=3.0.0",
+    "PyYAML>=6.0",
+    "requests>=2.31.0",
+    "playwright>=1.35.0; extra == 'web'",
+    "tree_sitter>=0.2.0; extra == 'treesitter'",
+    "tomli_w>=1.0.0",
 ]
 
 [project.scripts]

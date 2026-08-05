@@ -12,6 +12,10 @@ class BasePlugin(ABC):
     def plugin_type(self) -> str:
         pass
 
+    @property
+    def metadata(self) -> Dict[str, Any]:
+        return {}
+
     @abstractmethod
     def get_questions(self) -> List[Dict[str, Any]]:
         pass
