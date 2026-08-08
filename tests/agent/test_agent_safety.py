@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 from orix.core.permissions import PermissionManager
 from orix.core.toolbox import WorkspaceToolbox
+from orix.core.agent import AgentSession
 
 # --- Workspace Boundary & Invalid Path Tests ---
 
@@ -80,3 +81,47 @@ def test_permission_manager_verify_url(mock_input):
     mock_input.return_value = "no"
     assert pm.verify_url("https://unallowed-domain.com") is False
     assert mock_input.call_count == 1
+
+
+# --- Agent Session Loop Tests ---
+
+@patch("orix.core.agent.WorkspaceToolbox.call_tool")
+def test_agent_session_success_loop(mock_call_tool, tmp_path):
+    # Mock toolbox responses for the full execution loop
+    mock_call_tool.side_effect = [
+        {"success": True, "result": ["main.py"]}, # inspect_project
+        {"success": True, "result": "print('hello')"}, # read_file
+        {"success": True, "result": "Successfully wrote file"}, # write_file
+        {"success": True, "result": {"exit_code": 0, "stdout": "Passed", "stderr": ""}}, # run_test (first attempt succeeds)
+        {"success": True, "result": {"exit_code": 0, "stdout": "", "stderr": ""}} # run_linter
+    ]
+
+    session = AgentSession(str(tmp_path), mode="force", force=True)
+    plan = session._plan("Modify main.py")
+    res = session._execute_plan(plan)
+
+    assert res["success"] is True
+    assert mock_call_tool.call_count == 5
+
+@patch("orix.core.agent.WorkspaceToolbox.call_tool")
+def test_agent_session_failed_loop_exceeded(mock_call_tool, tmp_path):
+    # Mock toolbox responses: test suite fails continually
+    mock_call_tool.side_effect = [
+        {"success": True, "result": ["main.py"]}, # inspect_project
+        {"success": True, "result": "print('hello')"}, # read_file
+        {"success": True, "result": "Successfully wrote file"}, # write_file
+        {"success": True, "result": {"exit_code": 1, "stdout": "Fail", "stderr": "SyntaxError"}}, # run_test 1
+        {"success": True, "result": "Successfully wrote file"}, # write_file (repair 1)
+        {"success": True, "result": {"exit_code": 1, "stdout": "Fail", "stderr": "SyntaxError"}}, # run_test 2
+        {"success": True, "result": "Successfully wrote file"}, # write_file (repair 2)
+        {"success": True, "result": {"exit_code": 1, "stdout": "Fail", "stderr": "SyntaxError"}}, # run_test 3
+        {"success": True, "result": "Successfully wrote file"}, # write_file (repair 3)
+    ]
+
+    session = AgentSession(str(tmp_path), mode="force", force=True, max_repair_attempts=2)
+    plan = session._plan("Modify main.py")
+    res = session._execute_plan(plan)
+
+    # Since attempts exceeded max_repair_attempts (2), it should fail safely
+    assert res["success"] is False
+    assert "Auto-repair failed" in res["error"]

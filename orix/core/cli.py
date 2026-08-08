@@ -257,5 +257,100 @@ def setup_treesitter(bundle: str, langs: tuple):
     except Exception as e:
         console.print(f"[bold red]Failed to build tree-sitter bundle:[/bold red] {e}")
 
+@cli.command()
+@click.argument("idea", required=False)
+def architect(idea):
+    """Transform an idea prompt into architectural specifications."""
+    if not idea:
+        import questionary
+        idea = questionary.text("Describe the application or SaaS idea you want to design:").ask()
+
+    if not idea:
+        console.print("[bold red]Error:[/bold red] An idea description is required.")
+        return
+
+    from orix.core.architect import Architect
+    with console.status("[bold green]Architecting project design specifications..."):
+        try:
+            arch = Architect(os.getcwd())
+            res = arch.generate_spec(idea)
+            console.print("\n[bold green]Success![/bold green] Architecture generated under [cyan].orix/[/cyan]")
+            console.print(f"- Architecture: [cyan]{res['paths']['architecture']}[/cyan]")
+            console.print(f"- Plan: [cyan]{res['paths']['plan']}[/cyan]")
+            console.print(f"- Decisions: [cyan]{res['paths']['decisions']}[/cyan]")
+        except Exception as e:
+            console.print(f"\n[bold red]Error architecting idea:[/bold red] {e}")
+
+@cli.command()
+@click.argument("idea", required=False)
+@click.option("--resume", is_flag=True, help="Resume project generation from last checkpoint.")
+def forge(idea, resume):
+    """Orchestrate the end-to-end forging of an application from idea to validated code."""
+    if not idea and not resume:
+        import questionary
+        idea = questionary.text("Describe the application you want Orix to Forge:").ask()
+
+    if not idea and not resume:
+        console.print("[bold red]Error:[/bold red] Either an idea prompt or --resume is required.")
+        return
+
+    from orix.core.forge import Forge
+    try:
+        forge_engine = Forge(os.getcwd(), TEMPLATES_DIR, PLUGINS_DIR)
+        forge_engine.run_forge(idea=idea, resume=resume)
+        console.print("\n[bold green]Success![/bold green] App forging completed.")
+    except Exception as e:
+        console.print(f"\n[bold red]Error forging application:[/bold red]\n{e}")
+
+@cli.command()
+def doctor():
+    """Diagnose the workspace health, structure, and configurations."""
+    from orix.core.doctor import Doctor
+    with console.status("[bold green]Running workspace health diagnostics..."):
+        try:
+            doc = Doctor(os.getcwd())
+            report = doc.run_diagnostics()
+
+            console.print("\n[bold green]=== Orix Project Health Report ===[/bold green]")
+            scores = report["scores"]
+            console.print(f"Security:     [bold cyan]{scores['security']}/100[/bold cyan]")
+            console.print(f"Testing:      [bold cyan]{scores['testing']}/100[/bold cyan]")
+            console.print(f"Dependencies: [bold cyan]{scores['dependencies']}/100[/bold cyan]")
+            console.print(f"Architecture: [bold cyan]{scores['architecture']}/100[/bold cyan]")
+            console.print("-" * 30)
+            console.print(f"Overall:      [bold green]{scores['overall']}/100[/bold green]\n")
+
+            if report["issues"]:
+                console.print("[bold yellow]Discovered Issues:[/bold yellow]")
+                for issue in report["issues"]:
+                    console.print(f"- {issue}")
+            else:
+                console.print("[bold green]All checks passed cleanly! Absolute clean health.[/bold green]")
+        except Exception as e:
+            console.print(f"\n[bold red]Error running diagnostics:[/bold red] {e}")
+
+@cli.command()
+@click.argument("target_path", type=click.Path(exists=True), required=True)
+def explain(target_path):
+    """Explain the purpose, dependencies, functions, and risks of a file or folder."""
+    from orix.core.explain import Explainer
+    with console.status(f"[bold green]Analyzing target code path: '{target_path}'..."):
+        try:
+            exp = Explainer(os.getcwd())
+            res = exp.explain_path(target_path)
+
+            console.print(f"\n[bold green]=== Code Explanation: {target_path} ===[/bold green]")
+            console.print(f"[bold yellow]Purpose:[/bold yellow]\n{res['purpose']}\n")
+            if res["dependencies"]:
+                console.print(f"[bold yellow]Dependencies:[/bold yellow]\n{', '.join(res['dependencies'])}\n")
+            if res["important_functions"]:
+                console.print(f"[bold yellow]Exposed Symbols:[/bold yellow]\n{', '.join(res['important_functions'][:10])}\n")
+            console.print(f"[bold yellow]Execution Flow:[/bold yellow]\n{res['execution_flow']}\n")
+            console.print("[bold yellow]Potential Security & Safety Risks:[/bold yellow]")
+            for risk in res["potential_risks"]:
+                console.print(f"- {risk}")
+        except Exception as e:
+            console.print(f"\n[bold red]Error explaining target path:[/bold red] {e}")
+
 if __name__ == "__main__":
     cli()
