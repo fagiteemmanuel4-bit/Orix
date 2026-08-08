@@ -235,6 +235,169 @@ def diagnose():
 
 
 @cli.command()
+@click.argument("idea", required=True)
+@click.option("--output-dir", type=click.Path(), default=None, help="Custom directory for architecture output files.")
+def architect(idea, output_dir):
+    """Generate architecture design and build plan from a project idea description."""
+    from orix.core.architect import Architect
+    try:
+        arch = Architect()
+        res = arch.generate_spec(idea, target_dir=output_dir)
+        console.print("[bold green]Success![/bold green] Architectural specifications generated successfully:")
+        console.print(f"- Architecture Spec: [cyan]{res['architecture']}[/cyan]")
+        console.print(f"- Build Plan: [cyan]{res['plan']}[/cyan]")
+        console.print(f"- Decisions Log: [cyan]{res['decisions']}[/cyan]")
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {str(e)}")
+
+
+@cli.command()
+@click.argument("idea", required=False)
+@click.option("--resume/--no-resume", default=True, help="Resume from the last saved checkpoint.")
+@click.option("--dry-run/--no-dry-run", default=False, help="Simulate stages without making directory edits.")
+@click.option("--output", type=click.Path(), default=None, help="Output directory path.")
+def forge(idea, resume, dry_run, output):
+    """Execute a multi-stage resumable project scaffolding workflow."""
+    from orix.core.forge import ForgeWorkflow
+
+    workflow = ForgeWorkflow(TEMPLATES_DIR, PLUGINS_DIR)
+
+    # If not resuming and no idea was passed, print error
+    if not resume and not idea:
+        console.print("[bold red]Error:[/bold red] You must provide a project idea description when starting a new forge workflow.")
+        return
+
+    checkpoint = workflow.load_checkpoint()
+    if resume and not idea:
+        if not checkpoint or not checkpoint.get("idea"):
+            console.print("[bold red]Error:[/bold red] No saved checkpoint found to resume. Please provide a project idea.")
+            return
+        idea = checkpoint.get("idea")
+
+    console.print(f"[bold green]Starting Orix Forge:[/bold green] [cyan]'{idea}'[/cyan]\n")
+
+    for step in workflow.run(idea=idea, resume=resume, dry_run=dry_run, output_path=output):
+        status = step.get("status")
+        stage = step.get("stage")
+        message = step.get("message")
+
+        if status == "starting":
+            console.print(f"[yellow]▶ {stage.upper()}...[/yellow] {message}")
+        elif status == "success":
+            console.print(f"[green]✔ {stage.upper()}:[/green] Completed.")
+        elif status == "skipped":
+            console.print(f"[blue]ℹ {stage.upper()}:[/blue] Already completed, skipping.")
+        elif status == "failed":
+            console.print(f"\n[bold red]✖ {stage.upper()} FAILED:[/bold red] {message}")
+            if "explanation" in step:
+                console.print(f"\n[bold yellow]Explanation & Help:[/bold yellow]\n{step['explanation']}")
+            return
+        elif status == "complete":
+            console.print(f"\n[bold green]★ FORGE COMPLETE! ★[/bold green]\n")
+            if not dry_run:
+                summary = step.get("state", {}).get("report_summary", "")
+                console.print(summary)
+            else:
+                console.print("[yellow]Dry-run finished. No project directories were created.[/yellow]")
+
+
+@cli.command()
+def doctor():
+    """Diagnose workspace health and security configurations."""
+    from orix.core.doctor import OrixDoctor
+
+    doc = OrixDoctor(os.getcwd())
+    report = doc.run_diagnostics()
+
+    scores = report["scores"]
+    issues = report["issues"]
+
+    console.print("\n[bold green]⚕ Orix Project Health Diagnosis ⚕[/bold green]\n")
+
+    table = Table(title="Health Scores", border_style="cyan")
+    table.add_column("Category", style="cyan")
+    table.add_column("Score", justify="right")
+
+    for category, score in scores.items():
+        color = "green" if score >= 80 else ("yellow" if score >= 50 else "red")
+        table.add_row(category, f"[{color}]{score}/100[/{color}]")
+
+    console.print(table)
+    console.print()
+
+    any_issues = False
+    for category, cat_issues in issues.items():
+        if cat_issues:
+            any_issues = True
+            console.print(f"[bold yellow]⚠️  {category} Opportunities:[/bold yellow]")
+            for issue in cat_issues:
+                console.print(f"  - {issue}")
+            console.print()
+
+    if not any_issues:
+        console.print("[bold green]✔ Excellent! No critical issues or security vulnerability patterns detected.[/bold green]\n")
+
+    console.print(Panel(report["scoring_model"], title="Scoring Methodology Documentation", border_style="blue"))
+
+
+@cli.command()
+@click.argument("target", type=click.Path(exists=True), required=True)
+def explain(target):
+    """Generate professional explanation of a file or directory based on source code analysis."""
+    from orix.core.explain import OrixExplain
+
+    explainer = OrixExplain(os.getcwd())
+    try:
+        report = explainer.explain_path(target)
+
+        console.print(f"\n[bold green]✦ Orix Code Explanation: {report['path']} ✦[/bold green]\n")
+
+        console.print(f"[bold cyan]● Purpose:[/bold cyan]\n  {report['purpose']}")
+        console.print()
+
+        if report["type"] in ("file", "binary_file"):
+            if "dependencies" in report and report["dependencies"]:
+                console.print("[bold cyan]● Dependencies & Imports:[/bold cyan]")
+                for dep in report["dependencies"]:
+                    console.print(f"  - {dep}")
+                console.print()
+
+            if "important_functions" in report and report["important_functions"]:
+                console.print("[bold cyan]● Important Functions & Classes:[/bold cyan]")
+                for fn in report["important_functions"]:
+                    console.print(f"  - {fn}")
+                console.print()
+
+        elif report["type"] == "directory":
+            if "subdirectories" in report and report["subdirectories"]:
+                console.print("[bold cyan]● Subdirectories:[/bold cyan]")
+                for sd in report["subdirectories"]:
+                    console.print(f"  - {sd}/")
+                console.print()
+
+            if "files" in report and report["files"]:
+                console.print("[bold cyan]● Top-level Files:[/bold cyan]")
+                for f in report["files"]:
+                    console.print(f"  - {f}")
+                console.print()
+
+        console.print(f"[bold cyan]● Execution Flow:[/bold cyan]\n  {report['execution_flow']}")
+        console.print()
+
+        if "risks" in report and report["risks"]:
+            console.print("[bold red]● Potential Risks & Recommendations:[/bold red]")
+            for risk in report["risks"]:
+                console.print(f"  - {risk}")
+            console.print()
+
+        if report.get("warning"):
+            console.print(f"[bold yellow]⚠️  Warning:[/bold yellow] {report['warning']}\n")
+
+    except Exception as e:
+        console.print(f"[bold red]Error explaining target:[/bold red] {str(e)}")
+
+
+@cli.command()
 @click.option("--bundle", type=click.Path(), default=None, help="Path to output bundle (.so)")
 @click.option("--langs", multiple=True, help="Language=git_repo pairs, e.g. python=https://... (can repeat)")
 def setup_treesitter(bundle: str, langs: tuple):

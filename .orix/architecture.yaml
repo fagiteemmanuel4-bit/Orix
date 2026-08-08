@@ -1,0 +1,19 @@
+specification:
+  application_type: REST API Service
+  components:
+    apis: REST APIs
+    authentication: None
+    database: sqlite
+    external_services: None
+    storage: Local File System
+  frameworks:
+    backend: fastapi
+    frontend: none
+  operations:
+    deployment: Standard
+    testing: pytest
+  project_name: build-inventory
+  security:
+  - Workspace boundary protection
+  - Environment variable secrets management
+  - Input parameter validation

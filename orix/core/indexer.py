@@ -1,5 +1,6 @@
 import ast
 import os
+import fnmatch
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from orix.core.vector_store import SimpleVectorStore
@@ -16,6 +17,7 @@ class WorkspaceIndexer:
     def __init__(self, root_path: str, storage_dir: Optional[str] = None):
         self.root_path = Path(root_path).resolve()
         self.store = SimpleVectorStore(storage_dir)
+
     def list_files_to_index(self) -> List[Path]:
         return [p for p in self.root_path.rglob("*") if p.is_file() and p.suffix in self.CODE_EXTENSIONS]
 
@@ -34,6 +36,22 @@ class WorkspaceIndexer:
             source = path.read_text(encoding="utf-8")
         except Exception:
             return
+
+        # Extract imports for relationships
+        imports = []
+        if path.suffix == ".py":
+            try:
+                tree = ast.parse(source)
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        for name in node.names:
+                            imports.append(name.name)
+                    elif isinstance(node, ast.ImportFrom):
+                        if node.module:
+                            imports.append(node.module)
+            except Exception:
+                pass
+
         # Prefer language-aware chunking if tree-sitter is available and configured
         ts_chunks = self._try_tree_sitter_chunks(source, path) if TREE_SITTER_AVAILABLE else None
         if ts_chunks:
@@ -42,12 +60,19 @@ class WorkspaceIndexer:
             chunks = self._ast_chunks(source)
         else:
             chunks = self._text_chunks(source)
+
         for idx, chunk in enumerate(chunks):
             self.store.add_chunk(
                 str(path),
                 f"{path.name}-{idx}",
                 chunk["text"],
-                {"path": str(path), "type": chunk["type"], "name": chunk.get("name", ""), "length": len(chunk["text"])},
+                {
+                    "path": str(path),
+                    "type": chunk["type"],
+                    "name": chunk.get("name", ""),
+                    "length": len(chunk["text"]),
+                    "imports": imports
+                },
             )
 
     def _ast_chunks(self, source: str) -> List[Dict[str, Any]]:
@@ -71,12 +96,7 @@ class WorkspaceIndexer:
         return chunks
 
     def _try_tree_sitter_chunks(self, source: str, path: Path) -> Optional[List[Dict[str, Any]]]:
-        # This method attempts to use a prebuilt tree-sitter Language library if available.
-        # It is intentionally defensive: if no shared language library is found or parsing fails,
-        # it returns None to let existing fallbacks take over.
         try:
-            # Look for a user-provided shared library of languages. This is optional and
-            # non-prescriptive; users can place a compiled language bundle at ~/.orix/tree_sitter_langs.so
             lang_bundle = Path.home() / ".orix" / "tree_sitter_langs.so"
             if not lang_bundle.exists():
                 return None
@@ -91,7 +111,6 @@ class WorkspaceIndexer:
             chunks: List[Dict[str, Any]] = []
 
             def visit(node):
-                # node.type varies by language; look for common function/class names
                 if node.type in ("function_definition", "function", "method_definition", "class_definition", "class", "method_declaration", "function_declaration"):
                     start = node.start_byte
                     end = node.end_byte
@@ -117,3 +136,29 @@ class WorkspaceIndexer:
         if current:
             chunks.append({"type": "text", "text": "\n".join(current)})
         return chunks
+
+    # --- Precise Symbol Locations & Dependency Path Queries ---
+
+    def find_symbol_locations(self, symbol: str) -> List[Dict[str, Any]]:
+        """Finds all defined classes/functions matching the given symbol across python files."""
+        results = []
+        for chunk in self.store.index.get("chunks", []):
+            metadata = chunk.get("metadata", {})
+            if metadata.get("name", "").lower() == symbol.lower() and metadata.get("type") in ("class", "function"):
+                results.append({
+                    "path": metadata.get("path"),
+                    "type": metadata.get("type"),
+                    "name": metadata.get("name")
+                })
+        return results
+
+    def get_dependents(self, module_name: str) -> List[str]:
+        """Finds all indexed files that import/depend on the specified module."""
+        dependents = set()
+        for chunk in self.store.index.get("chunks", []):
+            metadata = chunk.get("metadata", {})
+            imports = metadata.get("imports", [])
+            if any(module_name.lower() in imp.lower() for imp in imports):
+                relative_path = str(Path(metadata["path"]).relative_to(self.root_path))
+                dependents.add(relative_path)
+        return list(dependents)

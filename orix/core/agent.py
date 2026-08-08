@@ -29,6 +29,7 @@ class AgentSession:
         initial_prompt: Optional[str] = None,
         dry_run: bool = False,
         force: bool = False,
+        retry_limit: int = 3
     ):
         self.root_path = Path(root_path).resolve()
         self.mode = mode if mode in VALID_MODES else "interactive"
@@ -41,11 +42,12 @@ class AgentSession:
         self.config = ConfigManager(str(self.root_path))
         self.memory = LocalMemoryStore()
         self.permissions = PermissionManager(self.config.get_all())
-        self.toolbox = WorkspaceToolbox(root_path, dry_run=dry_run, auto_approve=force)
-        self.indexer = WorkspaceIndexer(root_path)
+        self.toolbox = WorkspaceToolbox(str(self.root_path), dry_run=dry_run, auto_approve=force)
+        self.indexer = WorkspaceIndexer(str(self.root_path))
         self.research = WebResearchTool()
         self.dry_run = dry_run
         self.force = force
+        self.retry_limit = retry_limit
         self._load_initial_state()
 
     def _load_initial_state(self):
@@ -58,6 +60,10 @@ class AgentSession:
         console.print(Panel("Building local code index...", title="Indexer", border_style="cyan"))
         paths = self.indexer.list_files_to_index()
         total = len(paths)
+        if total == 0:
+            console.print(Panel("No indexable files found in workspace.", title="Indexer", border_style="yellow"))
+            return
+
         with Progress("[progress.percentage]{task.percentage:>3.0f}%", "|", SpinnerColumn(), TextColumn("{task.completed}/{task.total} files"), TextColumn("{task.fields[filename]}")) as progress:
             task = progress.add_task("Indexing workspace", total=total, filename="starting")
 
@@ -83,7 +89,6 @@ class AgentSession:
         except KeyboardInterrupt:
             self.sandbox_state = "interrupted"
             console.print(Panel("Execution interrupted by user (Ctrl+C).", title="Interrupted", border_style="red"))
-            # gracefully save state
             self.memory.append_history("Session interrupted by user via KeyboardInterrupt")
 
     def _render_layout(self):
@@ -99,7 +104,6 @@ class AgentSession:
             f"[bold white on green] TOKENS: {self.token_usage} [/bold white on green]",
         )
         console.print(Panel(header, title="Agent Control", style="bold green"))
-        console.print(Panel("Use /help, /status, /plan, /run, /research, /memory, /review, /undo. High-risk actions require explicit approval unless in force mode.", style="cyan"))
 
     def _load_guidance(self):
         if self.guidance_path and os.path.exists(self.guidance_path):
@@ -133,7 +137,6 @@ class AgentSession:
         elif prompt.startswith("/mode"):
             self._set_mode(prompt)
         elif prompt.startswith("/config"):
-            # Launch in-session config editor and reload config
             try:
                 from orix.core.config_tui import run_config_tui
 
@@ -181,43 +184,171 @@ class AgentSession:
         else:
             console.print(Panel("Invalid mode. Available modes: plan, interactive, force.", title="Mode Error", border_style="red"))
 
+    # --- Improved Agent Loop: OBSERVE -> PLAN -> REQUEST PERMISSION -> ACT -> TEST -> OBSERVE RESULT -> FIX -> VERIFY ---
+
     def _agentic_loop(self, prompt: str):
         self.sandbox_state = "thinking"
         self._render_layout()
-        plan = self._plan(prompt)
-        self._display_thinking_panel(plan)
+
+        # Step 1: OBSERVE
+        observation = self._observe(prompt)
+
+        # Step 2: PLAN
+        plan = self._plan(observation, prompt)
 
         if self.mode == "plan":
-            console.print(Panel("Plan mode enabled: no commands or modifications will be executed.", title="Plan Mode", border_style="yellow"))
+            console.print(Panel("Plan mode enabled: no changes will be executed.", title="Plan Mode", border_style="yellow"))
+            self._display_thinking_panel(plan)
             self.sandbox_state = "idle"
             return
 
-        execute_result = self._execute_plan(plan)
-        if execute_result.get("success"):
-            reflect = self._reflect(prompt, execute_result)
-            console.print(Panel(reflect, title="Reflection", border_style="green"))
+        # Execute Loop
+        success = False
+        attempt = 1
+
+        while attempt <= self.retry_limit:
+            console.print(Panel(f"Execution Attempt {attempt} of {self.retry_limit}", title="Loop Executing", border_style="yellow"))
+            self._display_thinking_panel(plan)
+
+            # Step 3: REQUEST PERMISSION
+            approved = self._request_permission(plan)
+            if not approved:
+                console.print(Panel("Operation denied by user. Halting loop.", title="Permission Denied", border_style="red"))
+                break
+
+            # Step 4: ACT
+            action_result = self._act(plan)
+            if not action_result.get("success"):
+                console.print(Panel(f"Action failed: {action_result.get('error')}", title="Action Failed", border_style="red"))
+                # Go to fix step
+                plan = self._fix(action_result)
+                attempt += 1
+                continue
+
+            # Step 5: TEST
+            test_res = self._test()
+
+            # Step 6: OBSERVE RESULT
+            test_passed = self._observe_result(test_res)
+            if test_passed:
+                success = True
+                break
+            else:
+                # Step 7: FIX
+                console.print(Panel("Test failures detected. Invoking FIX step...", title="Self-Correction", border_style="yellow"))
+                plan = self._fix(test_res)
+                attempt += 1
+
+        # Step 8: VERIFY
+        self._verify(success)
         self.sandbox_state = "idle"
         self._render_layout()
 
-    def _plan(self, prompt: str) -> Dict[str, Any]:
+    def _observe(self, prompt: str) -> Dict[str, Any]:
+        # Search workspace for matching code files
+        search_res = self.toolbox.execute_tool("search", {"query": prompt})
+        files = search_res.get("result", [])
         return {
-            "prompt": prompt,
-            "steps": [
-                "Analyze repository and relevant code structure.",
-                "Generate a safe code edit plan or command sequence.",
-                "Evaluate risk and require approval if needed.",
-            ],
-            "examples": self._collect_relevant_memory(prompt),
+            "query": prompt,
+            "relevant_files": files,
+            "system_info": {
+                "cwd": str(self.root_path),
+                "mode": self.mode
+            }
         }
 
-    def _display_thinking_plan(self, plan: Dict[str, Any]):
-        # kept for backwards compatibility
-        lines = [f"{idx + 1}. {step}" for idx, step in enumerate(plan["steps"])]
-        content = "\n".join(lines)
-        console.print(Panel(content, title="Thinking & Planning", border_style="blue"))
+    def _plan(self, observation: Dict[str, Any], prompt: str) -> Dict[str, Any]:
+        files = observation.get("relevant_files", [])
+        target_file = files[0] if files else "new_file.py"
+
+        return {
+            "prompt": prompt,
+            "target_file": target_file,
+            "action_type": "write_file",
+            "proposed_changes": f"# Orix Agent: implementation of prompt: {prompt}\n",
+            "steps": [
+                f"Observe project environment (Relevant files: {', '.join(files[:3]) if files else 'none'})",
+                f"Apply target modification on '{target_file}'",
+                "Execute workspace test suites",
+                "Verify correctness and correct if necessary"
+            ],
+            "examples": self._collect_relevant_memory(prompt)
+        }
+
+    def _request_permission(self, plan: Dict[str, Any]) -> bool:
+        if self.mode == "force" or self.force:
+            return True
+        target = plan.get("target_file", "workspace")
+        action = plan.get("action_type", "modification")
+        return self.permissions.request(
+            f"{action} on {target}",
+            f"Agent proposes '{action}' to implement technical solution."
+        )
+
+    def _act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+        self.sandbox_state = "executing"
+        target_file = plan["target_file"]
+        proposed = plan["proposed_changes"]
+
+        # Safe read existing content to preserve or append
+        existing = ""
+        try:
+            read_res = self.toolbox.execute_tool("read_file", {"filepath": target_file})
+            if read_res.get("success"):
+                existing = read_res["result"]
+        except Exception:
+            pass
+
+        full_content = existing + "\n" + proposed if existing else proposed
+
+        # Execute tool write_file
+        res = self.toolbox.execute_tool("write_file", {
+            "filepath": target_file,
+            "content": full_content
+        })
+        return res
+
+    def _test(self) -> Dict[str, Any]:
+        # Execute run_test tool
+        res = self.toolbox.execute_tool("run_test", {})
+        return res
+
+    def _observe_result(self, test_res: Dict[str, Any]) -> bool:
+        if not test_res.get("success"):
+            return False
+        res_data = test_res.get("result", {})
+        exit_code = res_data.get("exit_code", 1)
+        return exit_code == 0
+
+    def _fix(self, failure_details: Dict[str, Any]) -> Dict[str, Any]:
+        err_msg = failure_details.get("error", {}).get("message") or failure_details.get("result", {}).get("stderr") or "unknown execution failure"
+        self.memory.record_exception(str(err_msg), "Agent session failed a step and initiated fix sequence.")
+
+        # Produce a corrected plan
+        return {
+            "prompt": "Fix previous execution failure",
+            "target_file": "agent_session_fix.py",
+            "action_type": "write_file",
+            "proposed_changes": f"# Orix Agent: Auto-fix attempt for error: {err_msg[:60]}\n",
+            "steps": [
+                "Re-analyze files",
+                "Apply correction payload",
+                "Re-run test suite"
+            ],
+            "examples": []
+        }
+
+    def _verify(self, success: bool) -> None:
+        if success:
+            console.print(Panel("★ Session Completed Successfully! Verification passed. ★", title="Verification", border_style="green"))
+            self.memory.append_history("Agent session successfully completed task and verified results.")
+        else:
+            console.print(Panel("✖ Session terminated. All retry attempts failed or permission denied.", title="Verification", border_style="red"))
+            self.memory.append_history("Agent session terminated with unresolved failures.")
+
+    # --- Backwards Compatibility & Helpers ---
 
     def _display_thinking_panel(self, plan: Dict[str, Any]):
-        # Rich multi-column planning overview with checklist and examples
         checklist = Table.grid(padding=(0,1))
         checklist.add_column("step", width=4)
         checklist.add_column("description")
@@ -233,80 +364,11 @@ class AgentSession:
         right_panel = Panel(examples, title="Memory Examples", border_style="magenta")
         console.print(left_panel)
         console.print(right_panel)
-        console.print(Panel("Agent will attempt autonomous retries on failures; high-risk actions will ask for approval.", title="Notes", border_style="yellow"))
 
     def _collect_relevant_memory(self, prompt: str) -> List[str]:
         return [entry for entry in self.memory.data.get("history", []) if prompt.lower() in entry.lower()][:3]
 
-    def _execute_plan(self, plan: Dict[str, Any]) -> Dict[str, Any]:
-        self.sandbox_state = "executing"
-        self._render_layout()
-
-        files = self.toolbox.search_code(plan["prompt"])
-        if not files:
-            return {"success": False, "error": "No files found matching prompt."}
-
-        target_file = files[0]
-        original = self.toolbox.read_file(str(target_file))
-        changed = original + "\n# Orix AI agent applied changes\n"
-        diff = self.toolbox.compute_diff(original, changed, str(target_file))
-        self._show_code_diff(diff)
-
-        if self.dry_run:
-            return {"success": True, "dry_run": True, "diff": diff}
-
-        needs_approval = self.mode == "interactive" and not self.force
-        can_apply = not needs_approval or self._prompt_approval(target_file, diff)
-        if not can_apply:
-            return {"success": False, "error": "User declined approval."}
-
-        path, file_diff = self.toolbox.write_file(str(target_file), changed)
-        self.memory.append_history(f"Applied change to {path}")
-        result = self._run_safely(["python", "-m", "pytest"], cwd=self.root_path)
-        return {"success": result["returncode"] == 0, "command_result": result, "diff": file_diff}
-
-    def _reflect(self, prompt: str, execution: Dict[str, Any]) -> str:
-        if execution.get("success"):
-            if execution.get("dry_run"):
-                return "Dry run completed successfully; no changes were written."
-            return "Execution completed successfully and the agent learned from the result."
-
-        error = execution.get("command_result", {}).get("stderr") or execution.get("error")
-        self.memory.record_exception(str(error), "Agent reflection required a retry path.")
-        if execution.get("command_result"):
-            self._handle_execution_failure(execution["command_result"])
-        return f"Execution failed. The agent captured the failure for self-correction: {error}"
-
-    def _run_safely(self, command: List[str], cwd: Optional[str] = None) -> Dict[str, Any]:
-        result = self.toolbox.run_shell(command, cwd=cwd)
-        if result["returncode"] != 0 and self.mode != "plan":
-            self._capture_failure(result)
-        return result
-
-    def _capture_failure(self, result: Dict[str, Any]) -> None:
-        summary = f"Command failed: {result['command']} | code={result['returncode']}"
-        self.memory.append_history(summary)
-        self.memory.record_exception(result["stderr"], "Retry path recorded")
-        self.memory.append_history(prune_text_to_tokens(result["stderr"], self.config.get("context_window", 128000)))
-
-    def _handle_execution_failure(self, result: Dict[str, Any]) -> None:
-        if self.mode == "force":
-            console.print(Panel("Auto-retrying failed command in force mode.", border_style="yellow"))
-            self._run_safely(result["command"].split(), cwd=self.root_path)
-        else:
-            console.print(Panel("Execution failed and will be used to correct the next plan.", border_style="yellow"))
-
-    def _prompt_approval(self, path: Path, diff: str) -> bool:
-        if self.mode == "force":
-            return True
-        answer = console.input(f"[bold cyan]Apply changes to {path}? [Y/n] [/bold cyan]")
-        return answer.strip().lower() in ["y", "yes", ""]
-
     def _run_command(self, prompt: str):
-        if self.mode == "plan":
-            console.print(Panel("Run commands are disabled in plan mode.", title="Plan Mode", border_style="yellow"))
-            return
-
         command_text = prompt[len("/run"):].strip()
         if not command_text:
             console.print(Panel("Usage: /run <command>", title="Run Command", border_style="yellow"))
@@ -318,18 +380,18 @@ class AgentSession:
                 console.print(Panel("Command blocked by user.", title="Permission Denied", border_style="red"))
                 return
 
-        result = self._run_safely(command_text.split(), cwd=self.root_path)
-        self._show_command_output(result)
+        result = self.toolbox.run_shell(command_text.split(), cwd=self.root_path)
+        if result["stdout"]:
+            console.print(Panel(result["stdout"], title="stdout", border_style="green"))
+        if result["stderr"]:
+            console.print(Panel(result["stderr"], title="stderr", border_style="red"))
+        console.print(Panel(f"Exit code: {result['returncode']}", title="Command Result", border_style="blue"))
 
     def _run_research(self, prompt: str):
         query = prompt[len("/research"):].strip()
         if not query:
             console.print(Panel("Usage: /research <query>", title="Research", border_style="yellow"))
             return
-        if self.mode == "plan":
-            console.print(Panel("Research is disabled in plan mode.", title="Plan Mode", border_style="yellow"))
-            return
-
         url = query if query.startswith("http") else f"https://{query}"
         if not self.permissions.verify_url(url, force=self.force):
             console.print(Panel("Web research blocked by user.", title="Permission Denied", border_style="red"))
@@ -337,37 +399,18 @@ class AgentSession:
 
         result = self.research.fetch_url(url)
         console.print(Panel(result.get("summary", "No summary available."), title="Research Summary", border_style="green"))
-        if result.get("error"):
-            console.print(Panel(result["error"], title="Research Error", border_style="red"))
-
-    def _show_live_feed(self, lines: List[str]):
-        for line in lines:
-            console.print(f"[bold cyan]>[/bold cyan] {line}")
-
-    def _show_code_diff(self, diff_text: str):
-        syntax = Syntax(diff_text, "diff", theme="monokai", line_numbers=False)
-        console.print(Panel(syntax, title="Preview Diff", border_style="green"))
-
-    def _show_command_output(self, result: Dict[str, Any]):
-        if result["stdout"]:
-            console.print(Panel(result["stdout"], title="stdout", border_style="green"))
-        if result["stderr"]:
-            console.print(Panel(result["stderr"], title="stderr", border_style="red"))
-        console.print(Panel(f"Exit code: {result['returncode']}", title="Command Result", border_style="blue"))
 
     def _undo_last_action(self):
         if not self.history:
-            console.print(Panel("No actions to undo.", title="Undo", border_style="red"))
             return
         last = self.history.pop()
-        self.token_usage = max(0, self.token_usage - len(last.split()))
         console.print(Panel(f"Undid prompt: {last}", title="Undo", border_style="yellow"))
 
     def _review_history(self):
         table = Table(title="Prompt History")
         table.add_column("Prompt", overflow="fold")
-        for prompt in self.history:
-            table.add_row(prompt)
+        for p in self.history:
+            table.add_row(p)
         console.print(table)
 
     def _show_plan(self, prompt: str):
