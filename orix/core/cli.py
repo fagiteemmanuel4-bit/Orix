@@ -3,6 +3,8 @@ import subprocess
 import sys
 import click
 import yaml
+from rich.panel import Panel
+from rich.table import Table
 from orix.core.ai_builder import AIBuilder
 from orix.core.agent import AgentSession
 from orix.core.diagnostics import EnvironmentDiagnostics
@@ -17,6 +19,7 @@ PLUGINS_DIR = os.path.join(BASE_DIR, "plugins")
 
 @click.group(invoke_without_command=True)
 @click.option("--config", is_flag=True, help="Open interactive config editor and exit.")
+@click.version_option(version="3.1.0", prog_name="orix")
 @click.pass_context
 def cli(ctx, config):
     """Orix X: Universal Dev CLI — think git/npm/gh for app scaffolding."""
@@ -138,7 +141,6 @@ def ai_build():
 
         yaml_path = os.path.join(os.getcwd(), "orix_ai_spec.yaml")
         with open(yaml_path, "w", encoding="utf-8") as f:
-            import yaml
             yaml.safe_dump(spec_data, f)
 
         console.print(f"[bold green]AI spec written to:[/bold green] {yaml_path}")

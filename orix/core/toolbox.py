@@ -15,7 +15,24 @@ class WorkspaceToolbox:
         path = Path(relative_path)
         if not path.is_absolute():
             path = self.root_path / path
-        return path.resolve()
+        resolved = path.resolve()
+        try:
+            resolved.relative_to(self.root_path)
+        except ValueError:
+            raise ValueError(f"Path traversal detected: '{relative_path}' is outside workspace boundary '{self.root_path}'")
+        return resolved
+
+    def delete_file(self, relative_path: str) -> Path:
+        path = self.resolve_path(relative_path)
+        if self.dry_run:
+            return path
+        if path.exists():
+            if path.is_file():
+                path.unlink()
+            elif path.is_dir():
+                import shutil
+                shutil.rmtree(path)
+        return path
 
     def read_file(self, relative_path: str) -> str:
         path = self.resolve_path(relative_path)
