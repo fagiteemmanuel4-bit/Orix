@@ -1,0 +1,8 @@
+framework: fastapi
+project_name: build-inventory
+stages:
+  1_requirements: Refine the functional requirements from the prompt idea.
+  2_architecture: Define component interaction model and DB schema.
+  3_generation: Scaffold project via Orix CLI using fastapi template.
+  4_validation: Check for essential boilerplate files and workspace bounds.
+  5_testing: Run automated tests under pytest.
