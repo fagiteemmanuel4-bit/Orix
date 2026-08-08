@@ -38,7 +38,7 @@ def test_renderer_renders_template(tmp_path):
 
 def test_orchestrator_integration(tmp_path):
     # Use real templates and plugins for integration test
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     templates_dir = os.path.join(base_dir, "orix", "templates")
     plugins_dir = os.path.join(base_dir, "orix", "plugins")
     
