@@ -14,6 +14,7 @@ dependencies = [
     "playwright>=1.35.0; extra == 'web'",
     "tree_sitter>=0.2.0; extra == 'treesitter'",
     "tomli_w>=1.0.0",
+    "tomli>=1.1.0; python_version < '3.11'",
 ]
 
 [project.scripts]
