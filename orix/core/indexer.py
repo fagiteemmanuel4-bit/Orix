@@ -4,7 +4,6 @@ import fnmatch
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from orix.core.keyword_store import KeywordIndexStore
-from orix.core.simple_vector_store import SimpleVectorStore
 
 try:
     from tree_sitter import Parser, Language  # optional
@@ -17,7 +16,7 @@ class WorkspaceIndexer:
 
     def __init__(self, root_path: str, storage_dir: Optional[str] = None):
         self.root_path = Path(root_path).resolve()
-        self.store = SimpleVectorStore(storage_dir)
+        self.store = KeywordIndexStore(storage_dir)
 
     def list_files_to_index(self) -> List[Path]:
         return [p for p in self.root_path.rglob("*") if p.is_file() and p.suffix in self.CODE_EXTENSIONS]
