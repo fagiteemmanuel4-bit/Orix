@@ -1,4 +1,4 @@
-# 🌌 Orix X
+# 🌌 Orix
 
 ```
    ____         _       
@@ -24,12 +24,13 @@ To make Orix trustworthy, all features are classified by their stability and rea
 ### ✅ Stable (Actually Works)
 - **Plugin Loading & Discovery**: Auto-discovery of custom plugins and frameworks at runtime.
 - **System Architecture Specifier (`orix architect`)**: Designs system spec blueprints under `.orix/` (`architecture.yaml`, `plan.yaml`, and `decisions.md`).
-- **Resumable Scaffold Workflow (`orix/forge`)**: Coordinates a multi-stage project generation loop with resumption capabilities (`.orix/forge_checkpoint.json`).
+- **Resumable Scaffold Workflow (`orix forge`)**: Coordinates a multi-stage project generation loop with resumption capabilities (`.orix/forge_checkpoint.json`).
 - **Structured Workspace Toolbox**: Standardized schemas and boundary protection checks covering reads, searches, and file creations.
-- **Evidence-Driven Diagnostics (`orix doctor`)**: Transparent, severity-categorized project health scorecard mapping issues to clear scores.
+- **Evidence-Driven Diagnostics (`orix doctor`)**: Severity-categorized project health scorecard mapping issues to clear scores.
 - **Code Explain Analyzer (`orix explain`)**: Statically parses directory layouts or source file components, imports, and risks.
 - **Model-Agnostic Providers**: Pluggable support for OpenAI, Anthropic, Gemini, OpenRouter, and local Ollama interfaces.
 - **Deterministic Agent Evaluator (`orix eval`)**: Automated metrics logging (token counts, iterations, passes) across isolated test sandboxes.
+- **Release Validation Gate (`orix self-test`)**: Click-driven validation checking 100% of the active Orix sub-systems.
 
 ### 🧪 Experimental (Subject to change)
 - **Autonomous Coding Agent Session (`orix agent`)**: Active model-driven loop matching `OBSERVE -> PLAN -> REQUEST PERMISSION -> ACT -> TEST -> OBSERVE RESULT -> FIX -> VERIFY`.
@@ -53,6 +54,7 @@ orix/
 │   ├── keyword_store.py   # Truthful local workspace keyword database (was SimpleVectorStore)
 │   ├── orchestrator.py    # Wires plugins + renderer together, drives generation
 │   ├── plugin_manager.py  # Discovers and loads plugins from orix/plugins/
+│   ├── selftest.py        # Automated release gate validation suite
 │   └── toolbox.py         # Schema-validated tools and workspace boundary protection
 ├── sdk/
 │   └── base.py            # SDK Base classes
@@ -95,13 +97,16 @@ orix eval
 
 # List local Ollama and configured cloud model statuses
 orix ai models
+
+# Run full sub-system diagnostics release gate
+orix self-test
 ```
 
 ---
 
 ## 🧪 Development & Testing
 
-Orix prioritizes rigorous automated verification. Run the full test suite with 50+ passing tests across indexer, toolbox, doctor, agent, and security boundaries:
+Orix prioritizes rigorous automated verification. Run the full test suite with 55+ passing tests across indexer, toolbox, doctor, agent, and security boundaries:
 
 ```bash
 pytest

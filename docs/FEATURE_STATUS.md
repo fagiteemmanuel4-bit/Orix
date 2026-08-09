@@ -1,28 +1,21 @@
-# Feature Status Report - Orix X (Phase P0.5 Hardening)
+# Orix Feature Status Report — Release-Candidate Version (P0.5)
 
-This report details the stable, truthful, and evidence-driven status of every significant feature in the Orix codebase following the production hardening audit of Phase P0.5.
-
----
-
-## Overview
-
-| Feature | Status | Implementation Location | Entry Point | Primary Dependencies | Key Audited Behavior |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Plugin Loading & Discovery** | **STABLE** | `orix/core/plugin_manager.py` | `PluginManager.load_plugins()` | `importlib.util`, `inspect` | Safely handles individual plugin failure or syntax warnings without crashing the CLI runner. |
-| **Model-Agnostic AI Providers** | **STABLE** | `orix/core/ai_providers.py` | `get_provider()` | `requests` | Abstracted interface supporting local (Ollama) and cloud APIs (OpenAI, Anthropic, Gemini, OpenRouter) with secure local secrets delegation. |
-| **Orix Architect Blueprinting** | **STABLE** | `orix/core/architect.py` | `Architect.generate_spec()` | `PyYAML` | Parses prompts into structured system plans, outputting `.orix/architecture.yaml`, `.orix/plan.yaml`, and `.orix/decisions.md` before coding. |
-| **Resumable Orix Forge** | **STABLE** | `orix/core/forge.py` | `ForgeWorkflow.run()` | `subprocess` | Model-driven requirements analysis sequence (`Idea -> Requirements -> Architecture -> Plan -> Selection -> Generation -> Dependencies -> Tests -> Report`). Saves checks at `.orix/forge_checkpoint.json`. Runs and verifies physical generated test suites. |
-| **Model-Driven Tool Agent** | **EXPERIMENTAL** | `orix/core/agent.py` | `AgentSession.run()` | `PermissionManager`, `WorkspaceToolbox` | Coordinates the full `OBSERVE -> PLAN -> REQUEST PERMISSION -> ACT -> TEST -> OBSERVE RESULT -> FIX -> VERIFY` cycle with a retry limit to prevent infinite loops. |
-| **Structured Toolbox Tools** | **STABLE** | `orix/core/toolbox.py` | `WorkspaceToolbox.execute_tool()` | `ast`, `fnmatch` | Validates schemas and maps tool execution to explicit permission levels (`READ_ONLY`, `SAFE`, `INTERACTIVE`, `FULL`). Enforces path resolution bounds. |
-| **Project Keyword Indexer** | **STABLE** | `orix/core/indexer.py` | `WorkspaceIndexer.index_workspace()` | `ast`, `orix/core/keyword_store.py` | Renamed from SimpleVectorStore to truth-driven `KeywordIndexStore`. Parses python imports, classes, functions, and extracts cross-file dependency relationships. |
-| **Orix Doctor Diagnostics** | **STABLE** | `orix/core/doctor.py` | `OrixDoctor.run_diagnostics()` | `pathlib` | Outputs structured findings classified by severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) and calculates transparent health indexes. |
-| **Orix Explain Analysis** | **STABLE** | `orix/core/explain.py` | `OrixExplain.explain_path()` | `ast` | Statically analyzes files/folders to describe code purpose, imports/dependencies, function blocks, flow, and potential complexity risks. |
-| **Deterministic Agent Eval** | **STABLE** | `orix/core/eval.py` | `OrixEvaluationSuite.run_evaluations()`| `tempfile` | Runs the agent session over 5 distinct, sandboxed target scenarios and reports pass/fail scorecards. |
+This status report details the fully audited, technically defensible readiness states of Orix sub-systems.
 
 ---
 
-## Detailed Audit Summary
+## 📊 Core Component Readiness Matrix
 
-1. **Scaffolding and AI Decoupling**: Orix does not implement an internal LLM model or autonomous reasoning engine from scratch. It is a model-agnostic, developer-workflow orchestration layer that interfaces with user-specified models.
-2. **Deterministic Evaluation**: Quality is verified with an automated evaluation scorecard (`orix eval`) running across isolated sandbox target scenarios.
-3. **Evidence-Driven Diagnostics**: The Orix Doctor score calculation is open-source, deterministic, and mapped to specific category-level deductions based on detected high-severity issues (unlocked packages, missing test configs, etc.).
+| Feature | Stability | Primary Location | Key Audited Implementation Details |
+| :--- | :--- | :--- | :--- |
+| **Model-Agnostic AI Providers** | **STABLE** | `orix/core/ai_providers.py` | Full BYOK (Bring Your Own Key) architecture with centralized `MODEL_REGISTRY`. Concrete adapters handle OpenAI, Anthropic, Gemini, OpenRouter, and local Ollama APIs. Includes `MockProvider` for complete offline test repeatability. |
+| **Structured Workspace Toolbox** | **STABLE** | `orix/core/toolbox.py` | Every tool specifies exact typed schemas, permission levels, validation, and structured dictionary output/error formats. Enforces sandboxed Path Traversal resolution checks. |
+| **System Specifier (`orix architect`)** | **STABLE** | `orix/core/architect.py` | Parses prompting intents to produce `.orix/architecture.yaml`, `.orix/plan.yaml`, and `.orix/decisions.md` before code gets generated. |
+| **Resumable Scaffolding (`orix forge`)** | **STABLE** | `orix/core/forge.py` | Structured requirement analysis. Automatically installs pip packages, physically runs generated test suites inside output folders, parses exit codes/counts, and tracks stage checkpoints via `.orix/forge_checkpoint.json`. |
+| **Diagnostics (`orix doctor`)** | **STABLE** | `orix/core/doctor.py` | Strictly evidence-driven findings categorized by severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`). Directly derives unweighted scores from these rules. |
+| **Code Explain Analyst (`orix explain`)** | **STABLE** | `orix/core/explain.py` | Parses module docstrings, function blocks, import lists, and reports complexity/security risks. Supports full directory graphs. |
+| **Release Validation Gate (`orix self-test`)** | **STABLE** | `orix/core/selftest.py` | Comprehensive click-driven diagnostic command running offline checks across all 12 key Orix subsystems. |
+| **Keyword Index Store** | **STABLE** | `orix/core/keyword_store.py` | Renamed from SimpleVectorStore to truth-driven `KeywordIndexStore`. Does not pretend to do vector similarity searches; instead implements precise local index keyword matches. |
+| **Automated Evaluation (`orix eval`)** | **STABLE** | `orix/core/eval.py` | Sandboxes the agent loop over 5 distinct, isolated benchmark scenarios and reports exact scorecard metrics (iterations, passes, tokens). |
+| **Project-Scoped Memory** | **STABLE** | `orix/core/memory.py` | Project-isolated memory written strictly to `.orix/memory.json` in the current workspace. Automatically scrubs private API keys or credential matches before writing to disk. |
+| **Autonomous Agent Loop** | **EXPERIMENTAL** | `orix/core/agent.py` | Active reasoning/action execution loops following `OBSERVE -> PLAN -> REQUEST PERMISSION -> ACT -> TEST -> OBSERVE RESULT -> FIX -> VERIFY` with auto-repair loops and retry bounds. |

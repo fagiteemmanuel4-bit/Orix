@@ -1,6 +1,7 @@
 {
   "preferences": {
-    "editor": "vscode"
+    "editor": "vscode",
+    "self-test-run": "success"
   },
   "resolved_exceptions": [],
   "project_insights": {},
