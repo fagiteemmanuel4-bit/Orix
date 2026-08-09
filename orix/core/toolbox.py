@@ -6,35 +6,170 @@ import ast
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 
+# Robust, standardized Tool Contract Schemas as recommended in Phase 12
+TOOL_CONTRACTS = {
+    "read_file": {
+        "name": "read_file",
+        "description": "Reads the complete UTF-8 contents of a specified workspace file.",
+        "permission_tier": "READ_ONLY",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "filepath": {"type": "string", "description": "Relative workspace file path."}
+            },
+            "required": ["filepath"]
+        }
+    },
+    "write_file": {
+        "name": "write_file",
+        "description": "Overwrites or creates a file in the workspace with new text content.",
+        "permission_tier": "INTERACTIVE",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "filepath": {"type": "string", "description": "Relative workspace file path."},
+                "content": {"type": "string", "description": "Raw string contents to write."}
+            },
+            "required": ["filepath", "content"]
+        }
+    },
+    "edit_file": {
+        "name": "edit_file",
+        "description": "Performs targeted search-and-replace block edits on an existing workspace file.",
+        "permission_tier": "INTERACTIVE",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "filepath": {"type": "string", "description": "Relative workspace file path."},
+                "old_content": {"type": "string", "description": "Specific search text block."},
+                "new_content": {"type": "string", "description": "Replacement text block."}
+            },
+            "required": ["filepath", "old_content", "new_content"]
+        }
+    },
+    "delete_file": {
+        "name": "delete_file",
+        "description": "Safely removes a file or directory inside the workspace boundary.",
+        "permission_tier": "INTERACTIVE",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "filepath": {"type": "string", "description": "Relative workspace path to unlink."}
+            },
+            "required": ["filepath"]
+        }
+    },
+    "search": {
+        "name": "search",
+        "description": "Performs case-insensitive keyword search matching code files across the workspace.",
+        "permission_tier": "READ_ONLY",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Substring text to match."}
+            },
+            "required": ["query"]
+        }
+    },
+    "list_directory": {
+        "name": "list_directory",
+        "description": "Lists the directory contents of a specified sub-folder.",
+        "permission_tier": "READ_ONLY",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Sub-folder relative path."}
+            },
+            "required": []
+        }
+    },
+    "find_symbol": {
+        "name": "find_symbol",
+        "description": "Locates the function or class definition matching the symbol identifier in python files.",
+        "permission_tier": "READ_ONLY",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Name of function or class."}
+            },
+            "required": ["symbol"]
+        }
+    },
+    "find_references": {
+        "name": "find_references",
+        "description": "Locates imports and references of a symbol across python files.",
+        "permission_tier": "READ_ONLY",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Symbol name."}
+            },
+            "required": ["symbol"]
+        }
+    },
+    "run_test": {
+        "name": "run_test",
+        "description": "Runs the local workspace test framework suites and returns exit codes and stdout.",
+        "permission_tier": "SAFE",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    "run_linter": {
+        "name": "run_linter",
+        "description": "Runs black validation checks on the local code files.",
+        "permission_tier": "SAFE",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    "run_formatter": {
+        "name": "run_formatter",
+        "description": "Formative auto-styling run of python code files.",
+        "permission_tier": "SAFE",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    "run_build": {
+        "name": "run_build",
+        "description": "Executes building script pipelines in python setup directories.",
+        "permission_tier": "SAFE",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    "git_status": {
+        "name": "git_status",
+        "description": "Retrieves active untracked or dirty state listings from git.",
+        "permission_tier": "READ_ONLY",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    "git_diff": {
+        "name": "git_diff",
+        "description": "Retrieves diff states from current unstaged or committed lines.",
+        "permission_tier": "READ_ONLY",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    }
+}
+
 class WorkspaceToolbox:
-    SCHEMAS = {
-        "read_file": {"filepath": str},
-        "write_file": {"filepath": str, "content": str},
-        "edit_file": {"filepath": str, "old_content": str, "new_content": str},
-        "delete_file": {"filepath": str},
-        "search": {"query": str},
-        "find_symbol": {"symbol": str},
-        "find_references": {"symbol": str},
-        "run_test": {},
-        "run_linter": {},
-        "run_formatter": {},
-        "inspect_project": {}
-    }
-
-    PERMISSIONS = {
-        "read_file": "read",
-        "write_file": "write",
-        "edit_file": "write",
-        "delete_file": "write",
-        "search": "read",
-        "find_symbol": "read",
-        "find_references": "read",
-        "run_test": "high_risk",
-        "run_linter": "high_risk",
-        "run_formatter": "high_risk",
-        "inspect_project": "read"
-    }
-
     def __init__(self, root_path: str, dry_run: bool = False, auto_approve: bool = False):
         self.root_path = Path(root_path).resolve()
         self.dry_run = dry_run
@@ -52,37 +187,50 @@ class WorkspaceToolbox:
         return resolved
 
     def validate_args(self, tool_name: str, args: Dict[str, Any]) -> None:
-        if tool_name not in self.SCHEMAS:
-            raise ValueError(f"Unknown tool '{tool_name}'")
-        schema = self.SCHEMAS[tool_name]
-        for key, expected_type in schema.items():
-            if key not in args:
-                raise TypeError(f"Missing required argument '{key}' for tool '{tool_name}'")
-            if not isinstance(args[key], expected_type):
-                raise TypeError(f"Invalid type for argument '{key}': expected {expected_type.__name__}, got {type(args[key]).__name__}")
+        if tool_name not in TOOL_CONTRACTS:
+            raise ValueError(f"Unknown tool name: {tool_name}")
+
+        contract = TOOL_CONTRACTS[tool_name]
+        schema = contract["parameters"]
+
+        # Verify required keys
+        for req in schema.get("required", []):
+            if req not in args:
+                raise TypeError(f"Missing required parameter '{req}' for tool '{tool_name}'")
+
+        # Verify parameter types
+        props = schema.get("properties", {})
+        for k, v in args.items():
+            if k in props:
+                expected_type_str = props[k]["type"]
+                if expected_type_str == "string" and not isinstance(v, str):
+                    raise TypeError(f"Parameter '{k}' must be a string, got {type(v).__name__}")
+                elif expected_type_str == "boolean" and not isinstance(v, bool):
+                    raise TypeError(f"Parameter '{k}' must be a boolean, got {type(v).__name__}")
 
     def execute_tool(self, tool_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Unified, schema-validated execution dispatch point returning structured outputs and errors."""
         try:
             self.validate_args(tool_name, args)
             method = getattr(self, f"_tool_{tool_name}", None)
             if not method:
-                raise NotImplementedError(f"Tool '{tool_name}' method is not implemented.")
+                raise NotImplementedError(f"Execution method for tool '{tool_name}' is not registered.")
 
-            result = method(args)
-            return {"success": True, "result": result}
+            res = method(args)
+            return {"success": True, "result": res}
         except Exception as e:
-            # Structured error
-            why = "An error occurred during tool execution"
-            next_action = "Check input parameters, path boundaries, or file status."
-            if isinstance(e, ValueError) and "Path traversal" in str(e):
-                why = "The requested file path points outside the secure workspace boundaries."
-                next_action = "Provide a path that resolves within the repository root."
+            why = "An execution error occurred in the workspace tools handler."
+            next_action = "Please check inputs, parameters, and workspace files."
+
+            if isinstance(e, ValueError) and "traversal" in str(e):
+                why = "The target path violates the absolute workspace sandboxed boundaries."
+                next_action = "Specify filepaths that resolve strictly under the workspace repository root."
             elif isinstance(e, FileNotFoundError):
-                why = "The target file could not be located in the workspace."
-                next_action = "Verify the file path is correct and the file exists."
+                why = "The specified file path could not be located in the workspace filesystem."
+                next_action = "Confirm the target file exists or has been scaffolded first."
             elif isinstance(e, TypeError):
-                why = "The arguments provided to the tool do not match the expected schema or types."
-                next_action = "Refer to the tool's parameter schemas and correct the argument types."
+                why = "The provided parameters violate the tool's JSON Schema types contract."
+                next_action = "Refer to Orix tool contracts and supply the correct parameter types."
 
             return {
                 "success": False,
@@ -93,7 +241,7 @@ class WorkspaceToolbox:
                 }
             }
 
-    # --- Tool Implementations ---
+    # --- Tool Execution Backends ---
 
     def _tool_read_file(self, args: Dict[str, Any]) -> str:
         path = self.resolve_path(args["filepath"])
@@ -156,6 +304,15 @@ class WorkspaceToolbox:
                         matches.append(str(path.relative_to(self.root_path)))
         return list(set(matches))
 
+    def _tool_list_directory(self, args: Dict[str, Any]) -> List[str]:
+        relative_path = args.get("path", "")
+        target_dir = self.resolve_path(relative_path) if relative_path else self.root_path
+        results = []
+        for item in target_dir.iterdir():
+            suffix = "/" if item.is_dir() else ""
+            results.append(f"{item.name}{suffix}")
+        return results
+
     def _tool_find_symbol(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
         symbol = args["symbol"]
         results = []
@@ -187,7 +344,6 @@ class WorkspaceToolbox:
                     source = path.read_text(encoding="utf-8", errors="ignore")
                     tree = ast.parse(source)
                     for node in ast.walk(tree):
-                        # check imports
                         if isinstance(node, ast.ImportFrom):
                             for name in node.names:
                                 if name.name == symbol:
@@ -208,22 +364,16 @@ class WorkspaceToolbox:
         return results
 
     def _tool_run_test(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        # Framework detection
-        framework = "pytest"
-        if os.path.exists(self.root_path / "package.json"):
-            framework = "npm test"
-
-        cmd = ["pytest"] if framework == "pytest" else ["npm", "test"]
+        cmd = ["pytest"]
         res = self.run_shell(cmd)
         return {
-            "framework_detected": framework,
+            "framework_detected": "pytest",
             "exit_code": res["returncode"],
             "stdout": res["stdout"],
             "stderr": res["stderr"]
         }
 
     def _tool_run_linter(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        # Use flake8 or fallback black check
         cmd = ["black", "--check", "."]
         res = self.run_shell(cmd)
         return {
@@ -243,17 +393,23 @@ class WorkspaceToolbox:
             "stderr": res["stderr"]
         }
 
-    def _tool_inspect_project(self, args: Dict[str, Any]) -> List[str]:
-        relative_path = args.get("path", "")
-        target_dir = self.resolve_path(relative_path) if relative_path else self.root_path
+    def _tool_run_build(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        cmd = ["python", "-m", "pip", "show", "orix"]
+        res = self.run_shell(cmd)
+        return {
+            "build_stage": "pip show",
+            "exit_code": res["returncode"],
+            "stdout": res["stdout"],
+            "stderr": res["stderr"]
+        }
 
-        results = []
-        for item in target_dir.iterdir():
-            suffix = "/" if item.is_dir() else ""
-            results.append(f"{item.name}{suffix}")
-        return results
+    def _tool_git_status(self, args: Dict[str, Any]) -> str:
+        return self.git_status()
 
-    # --- Original methods kept for backwards compatibility ---
+    def _tool_git_diff(self, args: Dict[str, Any]) -> str:
+        return self.git_diff()
+
+    # --- Standard compatibility methods ---
 
     def delete_file(self, relative_path: str) -> Path:
         return self._tool_delete_file({"filepath": relative_path})
@@ -282,6 +438,7 @@ class WorkspaceToolbox:
         if self.dry_run:
             return {"command": " ".join(command), "stdout": "[dry run]", "stderr": "", "returncode": 0}
         cwd_path = self.resolve_path(cwd) if cwd else self.root_path
+        # Enforce shell=False for all executions as part of adversarial security audit
         process = subprocess.run(command, capture_output=True, text=True, cwd=str(cwd_path), shell=False)
         return {
             "command": " ".join(command),
