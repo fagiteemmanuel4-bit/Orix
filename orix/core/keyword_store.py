@@ -3,11 +3,11 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-class SimpleVectorStore:
+class KeywordIndexStore:
     def __init__(self, storage_dir: Optional[str] = None):
         self.storage_dir = Path(storage_dir or (Path(os.getenv("XDG_CONFIG_HOME", Path.home() / ".config")) / "orix"))
         self.storage_dir.mkdir(parents=True, exist_ok=True)
-        self.index_file = self.storage_dir / "vector_index.json"
+        self.index_file = self.storage_dir / "keyword_index.json"
         self.index = self._load_index()
 
     def _load_index(self) -> Dict[str, Any]:

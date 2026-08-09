@@ -1,30 +1,28 @@
-# Feature Status Report - Orix X (Phase P0)
+# Feature Status Report - Orix X (Phase P0.5 Hardening)
 
-This report details the stability, location, test coverage, and security audit of every significant feature in the Orix codebase as of Phase P0.
+This report details the stable, truthful, and evidence-driven status of every significant feature in the Orix codebase following the production hardening audit of Phase P0.5.
 
 ---
 
 ## Overview
 
-| Feature | Status | Implementation Location | Entry Point | Primary Dependencies | Known Issues | Test Coverage | Recommended Next Action |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Plugin Loading & Discovery** | **WORKING** | `orix/core/plugin_manager.py` | `PluginManager.load_plugins()` | `importlib.util`, `inspect`, `os` | A syntax/import error in any plugin will crash the entire application on startup. No duplicate checking. | `tests/test_core.py` (basic load check) | Protect load sequence against individual plugin import failures; prevent duplicate plugin names. |
-| **Project Scaffolding / Orchestration** | **WORKING** | `orix/core/orchestrator.py` | `Orchestrator.generate()` | `TemplateRenderer`, `PluginManager`, `PyYAML` | Docker option is offered/validated but no Dockerfiles exist in templates. Spec resolution accepts paths with potential traversal. | `tests/test_core.py` (integration) | Add validation to spec paths and implement missing Dockerfile templates. |
-| **Recursive Jinja2 Rendering** | **WORKING** | `orix/core/renderer.py` | `TemplateRenderer.render_project()` | `jinja2`, `os` | Allows path traversal write if template names are manipulated. Unconditionally renders all files regardless of boolean flag context. | `tests/test_core.py` (unit) | Enforce template boundary checks; sanitize output filenames and directory paths. |
-| **AI Spec Builder** | **PARTIALLY_WORKING** | `orix/core/ai_builder.py` | `AIBuilder.build_spec()` | `requests`, `PyYAML`, OpenRouter/OpenAI API | Brittle markdown-extraction code (regex split of backticks). Prone to crashing on malformed YAML or API failures. | None | Add robust YAML parsing, schema validation, HTTP error/timeout handling, and full mock tests. |
-| **Agent Session Loop (Natural Language Coding)** | **EXPERIMENTAL** | `orix/core/agent.py` | `AgentSession.run()` | `ConfigManager`, `WorkspaceIndexer`, `WorkspaceToolbox`, `PermissionManager` | The AI generation/edits are simulated/hardcoded to append a static comment to the first matched file. Stdin prompts block when run non-interactively. | None | Ensure paths are relative and bounded to workspace. Enforce prompt validation. Add safety unit tests. |
-| **Workspace Indexing & Search** | **EXPERIMENTAL** | `orix/core/indexer.py`, `orix/core/vector_store.py` | `WorkspaceIndexer.index_workspace()` | `tree_sitter`, `ast`, `json` | "SimpleVectorStore" is actually a substring/keyword store, not a vector store. Highly dependent on local tree-sitter binary files. | None | Document as substring indexer rather than vector store to avoid false claims; add basic test suite. |
-| **Config TUI Editor** | **WORKING** | `orix/core/config_tui.py` | `run_config_tui()` | `questionary`, `ConfigManager` | TUI is fully interactive and blocks if standard input is unavailable. No schema validation of models or API endpoints. | None | Add unit test verifying that configuration values can be set and saved. |
-| **Environment Diagnostics** | **WORKING** | `orix/core/diagnostics.py` | `EnvironmentDiagnostics.run()` | `platform`, `shutil`, `subprocess` | None. | None | Add unit tests to verify tool checking behavior. |
-| **Web Research Tool** | **EXPERIMENTAL** | `orix/core/research.py` | `WebResearchTool.fetch_url()` | `requests`, `playwright` (optional), `re` | Simple regex parsing of title and paragraphs can fail on complex/malformed HTML pages. | None | Document limitations and mock network calls in tests. |
+| Feature | Status | Implementation Location | Entry Point | Primary Dependencies | Key Audited Behavior |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Plugin Loading & Discovery** | **STABLE** | `orix/core/plugin_manager.py` | `PluginManager.load_plugins()` | `importlib.util`, `inspect` | Safely handles individual plugin failure or syntax warnings without crashing the CLI runner. |
+| **Model-Agnostic AI Providers** | **STABLE** | `orix/core/ai_providers.py` | `get_provider()` | `requests` | Abstracted interface supporting local (Ollama) and cloud APIs (OpenAI, Anthropic, Gemini, OpenRouter) with secure local secrets delegation. |
+| **Orix Architect Blueprinting** | **STABLE** | `orix/core/architect.py` | `Architect.generate_spec()` | `PyYAML` | Parses prompts into structured system plans, outputting `.orix/architecture.yaml`, `.orix/plan.yaml`, and `.orix/decisions.md` before coding. |
+| **Resumable Orix Forge** | **STABLE** | `orix/core/forge.py` | `ForgeWorkflow.run()` | `subprocess` | Model-driven requirements analysis sequence (`Idea -> Requirements -> Architecture -> Plan -> Selection -> Generation -> Dependencies -> Tests -> Report`). Saves checks at `.orix/forge_checkpoint.json`. Runs and verifies physical generated test suites. |
+| **Model-Driven Tool Agent** | **EXPERIMENTAL** | `orix/core/agent.py` | `AgentSession.run()` | `PermissionManager`, `WorkspaceToolbox` | Coordinates the full `OBSERVE -> PLAN -> REQUEST PERMISSION -> ACT -> TEST -> OBSERVE RESULT -> FIX -> VERIFY` cycle with a retry limit to prevent infinite loops. |
+| **Structured Toolbox Tools** | **STABLE** | `orix/core/toolbox.py` | `WorkspaceToolbox.execute_tool()` | `ast`, `fnmatch` | Validates schemas and maps tool execution to explicit permission levels (`READ_ONLY`, `SAFE`, `INTERACTIVE`, `FULL`). Enforces path resolution bounds. |
+| **Project Keyword Indexer** | **STABLE** | `orix/core/indexer.py` | `WorkspaceIndexer.index_workspace()` | `ast`, `orix/core/keyword_store.py` | Renamed from SimpleVectorStore to truth-driven `KeywordIndexStore`. Parses python imports, classes, functions, and extracts cross-file dependency relationships. |
+| **Orix Doctor Diagnostics** | **STABLE** | `orix/core/doctor.py` | `OrixDoctor.run_diagnostics()` | `pathlib` | Outputs structured findings classified by severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) and calculates transparent health indexes. |
+| **Orix Explain Analysis** | **STABLE** | `orix/core/explain.py` | `OrixExplain.explain_path()` | `ast` | Statically analyzes files/folders to describe code purpose, imports/dependencies, function blocks, flow, and potential complexity risks. |
+| **Deterministic Agent Eval** | **STABLE** | `orix/core/eval.py` | `OrixEvaluationSuite.run_evaluations()`| `tempfile` | Runs the agent session over 5 distinct, sandboxed target scenarios and reports pass/fail scorecards. |
 
 ---
 
-## Detailed Audit & Brutal Honesty
+## Detailed Audit Summary
 
-1. **Docker Scaffold Option Claim**: The interactive prompts and YAML specs support `--docker`. However, looking closely at the `templates/` folder, **no template contains actual Docker files (`Dockerfile` or `docker-compose.yml`)**. Thus, choosing Docker has zero impact on the rendered project files.
-2. **"Vector Store" Claim**: The implementation of `SimpleVectorStore` uses basic case-insensitive substring search: `lower in chunk["text"].lower()`. There are no embeddings, vector metrics (such as cosine similarity), or actual vector search algorithms. This is a keyword search engine.
-3. **Agent Implementation**: The agent session is a skeleton that mimics agentic workflow but lacks live LLM integration for editing. High-risk operations (such as command execution) require approval, but file writes and reads lack robust verification against path traversal.
-4. **Security Vulnerabilities**:
-   - `WorkspaceToolbox` and `TemplateRenderer` do not validate workspace boundaries, making Orix vulnerable to Path Traversal (`../../etc/passwd`).
-   - `orix run` takes arbitrary arguments and executes them via `subprocess.run(..., shell=False)`. While `shell=False` limits shell injection, it still allows execution of any binary available in path.
+1. **Scaffolding and AI Decoupling**: Orix does not implement an internal LLM model or autonomous reasoning engine from scratch. It is a model-agnostic, developer-workflow orchestration layer that interfaces with user-specified models.
+2. **Deterministic Evaluation**: Quality is verified with an automated evaluation scorecard (`orix eval`) running across isolated sandbox target scenarios.
+3. **Evidence-Driven Diagnostics**: The Orix Doctor score calculation is open-source, deterministic, and mapped to specific category-level deductions based on detected high-severity issues (unlocked packages, missing test configs, etc.).

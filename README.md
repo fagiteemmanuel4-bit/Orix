@@ -7,13 +7,13 @@
 / /_/ / / / / / />  <    
 \____/_/ /_/ /_/_/|_|    
 
-⚡ UNIVERSAL DEVELOPER CLI PLATFORM ⚡
+⚡ UNIVERSAL DEVELOPER OS CLI PLATFORM ⚡
        Version 3.1.0
 ```
 
-**Orix X** is an independent, plugin-driven CLI designed to bootstrap apps and infrastructure faster than traditional generators. Instead of hardcoding every stack, Orix loads framework support as plugins at runtime, renders Jinja2 templates into a target folder, and delivers production-ready boilerplate — including auth, CI, and environment diagnostics.
+**Orix** is an extensible developer environment CLI and model-agnostic AI-native engineering assistant. It decouples app scaffolding, local workspace diagnostics, system blueprinting, and multi-stage generation from underlying model instances.
 
-Orix is built for developers, automation, and AI agents. It supports interactive prompts, deterministic CLI flags, and YAML spec files, so it works like `git`, `npm`, `gh`, `cargo`, or `nx` in modern workflows.
+Orix is built for engineers and AI agents. It integrates interactive prompting, automated testing, structural verification, and explicit permission boundaries.
 
 ---
 
@@ -22,25 +22,18 @@ Orix is built for developers, automation, and AI agents. It supports interactive
 To make Orix trustworthy, all features are classified by their stability and readiness below:
 
 ### ✅ Stable (Actually Works)
-*These features are fully implemented, thoroughly tested, and ready for production use.*
-- **Plugin Loading & Discovery**: Auto-discovery and loading of framework plugins from directory without core changes.
-- **Project Scaffolding / Orchestration**: Wires plugins, CLI context, and specs to orchestrate clean project generation.
-- **Jinja2 Recursive Rendering**: Walks directory structure and renders dynamic contents, file names, and directories.
-- **Environment Diagnostics**: Verifies host development dependencies (`python`, `node`, `git`, `docker`).
-- **Interactive TUI Config Editor**: Prompts and configures development roles, endpoints, and key models.
-- **Deterministic CLI Flags & Specs**: Supports non-interactive runs via click options or structured YAML specifications.
+- **Plugin Loading & Discovery**: Auto-discovery of custom plugins and frameworks at runtime.
+- **System Architecture Specifier (`orix architect`)**: Designs system spec blueprints under `.orix/` (`architecture.yaml`, `plan.yaml`, and `decisions.md`).
+- **Resumable Scaffold Workflow (`orix/forge`)**: Coordinates a multi-stage project generation loop with resumption capabilities (`.orix/forge_checkpoint.json`).
+- **Structured Workspace Toolbox**: Standardized schemas and boundary protection checks covering reads, searches, and file creations.
+- **Evidence-Driven Diagnostics (`orix doctor`)**: Transparent, severity-categorized project health scorecard mapping issues to clear scores.
+- **Code Explain Analyzer (`orix explain`)**: Statically parses directory layouts or source file components, imports, and risks.
+- **Model-Agnostic Providers**: Pluggable support for OpenAI, Anthropic, Gemini, OpenRouter, and local Ollama interfaces.
+- **Deterministic Agent Evaluator (`orix eval`)**: Automated metrics logging (token counts, iterations, passes) across isolated test sandboxes.
 
-### 🧪 Experimental (Exists but subject to change)
-*These features exist in the codebase but are currently under refinement or have mocked integrations.*
-- **AI Spec Builder (`ai_build`)**: Uses remote LLMs (e.g. OpenRouter/OpenAI-compatible) to synthesize scaffolding specs from natural language. Requires external API keys and has schema validators.
-- **Web Research Tool (`/research`)**: Fetches titles/paragraphs using simple requests or playwright.
-- **Workspace Indexing & Search**: Built-in AST and parser-based local keyword search. Uses `SimpleVectorStore` which conducts fast substring-based matches.
-- **Autonomous Agent Session (`agent`)**: Autonomous multi-agent development loop simulation. Employs user-permission guard rails but currently performs preset file mutations.
-
-### 📅 Planned (Not Implemented)
-*These features are part of the Orix X roadmap and do not yet have executable implementations.*
-- **Docker Scaffolding Generation**: Currently under template design. The interactive CLI accepts `--docker` but no Dockerfiles are rendered in default template packages yet.
-- **Multi-Agent Coding Workspace**: Multi-agent collaborative reasoning loops with custom sandbox isolation.
+### 🧪 Experimental (Subject to change)
+- **Autonomous Coding Agent Session (`orix agent`)**: Active model-driven loop matching `OBSERVE -> PLAN -> REQUEST PERMISSION -> ACT -> TEST -> OBSERVE RESULT -> FIX -> VERIFY`.
+- **Project Indexing & Dependents Tracking**: Parses imports and cross-module dependents using local AST logic.
 
 ---
 
@@ -49,21 +42,21 @@ To make Orix trustworthy, all features are classified by their stability and rea
 ```
 orix/
 ├── core/
-│   ├── cli.py             # Click-based CLI entrypoint (orix create)
+│   ├── cli.py             # Click-based CLI commands and entry points
+│   ├── architect.py       # Heuristic and structural system blueprinting
+│   ├── forge.py           # Multi-stage resumable project scaffolding workflow
+│   ├── ai_providers.py    # Model-agnostic AI provider abstractions
+│   ├── doctor.py          # Evidence-driven workspace diagnostics
+│   ├── explain.py         # Static code structure and execution flow analyst
+│   ├── eval.py            # Agent performance sandboxed scorecard evaluation
+│   ├── indexer.py         # AST syntax and module imports analyzer
+│   ├── keyword_store.py   # Truthful local workspace keyword database (was SimpleVectorStore)
 │   ├── orchestrator.py    # Wires plugins + renderer together, drives generation
 │   ├── plugin_manager.py  # Discovers and loads plugins from orix/plugins/
-│   ├── renderer.py        # Recursive Jinja2 template renderer
-│   └── ui.py               # TUI: banner, prompts (rich + questionary)
+│   └── toolbox.py         # Schema-validated tools and workspace boundary protection
 ├── sdk/
-│   └── base.py             # BasePlugin / FrameworkPlugin abstract classes
-├── plugins/
-│   ├── react.py            # React framework plugin
-│   ├── django.py           # Django framework plugin
-│   └── fastapi.py          # FastAPI framework plugin
-└── templates/
-    ├── react/               # React project template
-    ├── django/              # Django project template
-    └── fastapi/             # FastAPI project template
+│   └── base.py            # SDK Base classes
+└── plugins/               # Framework plugins
 ```
 
 ---
@@ -82,34 +75,33 @@ Requires Python 3.10+.
 
 ## 🚀 Usage
 
-### Interactive mode (human-friendly)
+### Command Summary
 
 ```bash
-orix create
-```
+# Generate architecture plan
+orix architect "Build a FastAPI SaaS"
 
-You'll get the Orix banner, a framework picker, and prompts for any options the chosen framework supports.
+# Execute multi-stage resumable scaffolding
+orix forge "Build an inventory app"
 
-### Deterministic mode (scriptable / AI-agent-friendly)
+# Execute evidence-driven project diagnostics
+orix doctor
 
-```bash
-orix create my-project --framework react --no-docker --auth
-```
+# Graph file structure and explain flow
+orix explain orix/core/cli.py
 
-Orix is designed to be called directly from automation and AI tools. Use exact flags or a YAML spec to make scaffolding reproducible and agent-ready.
+# Run sandboxed agent evaluation scorecard
+orix eval
 
-```bash
-orix create --spec orix.yaml
-orix plugin-install https://github.com/your-org/orix-react-plugin.git
-orix diagnose
-orix ai-build
+# List local Ollama and configured cloud model statuses
+orix ai models
 ```
 
 ---
 
 ## 🧪 Development & Testing
 
-Run the full automated test suite containing 35 units, integrations, CLI runner, and safety checks:
+Orix prioritizes rigorous automated verification. Run the full test suite with 50+ passing tests across indexer, toolbox, doctor, agent, and security boundaries:
 
 ```bash
 pytest
@@ -119,4 +111,4 @@ pytest
 
 ## 📄 License
 
-Orix X is open-source software licensed under the **MIT License**.
+Orix is open-source software licensed under the **MIT License**.

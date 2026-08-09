@@ -1,42 +1,26 @@
-# Orix Security & Hardening Model
+# Orix Security, Hardening & Permission Model
 
-Orix CLI employs a multi-tiered security and hardening model designed to protect the developer's system from path traversal, arbitrary file writes, and uncontrolled AI agent execution.
-
----
-
-## 🛡️ Key Hardening Defenses
-
-### 1. Path Traversal & Workspace Boundary Protection
-All file operations performed by the workspace toolbox (`WorkspaceToolbox`) are validated against a strict workspace root constraint.
-- **Defense**: In `resolve_path()`, any relative or absolute path is fully resolved (`Path.resolve()`). The resolved path must have the workspace directory as its ancestor:
-  ```python
-  try:
-      resolved.relative_to(self.root_path)
-  except ValueError:
-      raise ValueError("Path traversal detected: outside workspace boundary")
-  ```
-- **Scope**: Protects reading, writing, searching, and deleting operations from escaping the workspace boundary.
-
-### 2. Secure Template Rendering
-The template renderer (`TemplateRenderer`) ensures that template and destination paths are rigorously checked.
-- **Defense**:
-  - Validates that requested templates resolve inside the base template directory.
-  - Validates that rendered filenames and directories do not resolve outside the specified target directory.
-- **Scope**: Prevents template injection or malicious templates from writing files outside the generated project directory.
-
-### 3. AI Builder Validation
-The AI Builder parses specs with strict error handling and payload checking.
-- **Defense**:
-  - Restricts spec keys and checks for required structural fields (`project_name`, `framework`).
-  - Gracefully handles timeout errors, API auth/HTTP errors, and unexpected payload shapes from remote models.
-
-### 4. Interactive Permissions Gate
-The permission manager (`PermissionManager`) allows users to monitor and control AI agent actions.
-- **Defense**: High-risk activities like command execution, internet requests, or file manipulation require explicit runtime approval in interactive mode unless explicitly bypassed via `--force` or configuration.
+Orix CLI is engineered as a secure, sandboxed Developer OS CLI platform. It enforces a strict, multi-tiered security boundary to guarantee that untrusted AI outputs, malformed shell commands, or third-party templates cannot compromise the developer's system host.
 
 ---
 
-## ⚠️ Security Assumptions
+## 🛡️ Core Hardening Defenses
 
-- **Host Privilege**: Orix assumes that the host environment running the CLI is owned and secured by the developer. It does not run with root permissions by default.
-- **API Keys**: Users must handle AI model API keys securely (using environment variables or local git-ignored user configuration files with safe file permissions `0o600`).
+### 1. Unified Permission Tiers
+All toolbox operations mapped inside Orix reside under one of four explicit security permission tiers:
+- **`READ_ONLY`**: Includes reading files, directory inspection, syntax/AST indexing, and semantic searching. (Approved automatically in all standard runtime profiles).
+- **`SAFE`**: Execution of read-only static validations, such as linter verification (`run_linter`, `run_formatter`) and test suite verification (`run_test`).
+- **`INTERACTIVE`**: File system writes, file modifications, or file deletions. Forces runtime user confirmation prompts when in `INTERACTIVE` permission levels.
+- **`FULL`**: High-risk activities, such as executing ad-hoc shell commands (`run_shell`) or custom package dependency installations. Never allowed implicitly without explicit user approval.
+
+### 2. Path Traversal & Workspace Boundary Isolation
+- **Strict Resolution**: All operations resolving paths (`read_file`, `write_file`, `edit_file`, `delete_file`) route through `WorkspaceToolbox.resolve_path()`. This resolves paths fully (`Path.resolve()`), stripping any nested symlinks, absolute parameters, or parent relative path elements (`../`).
+- **Ancestor Checks**: Any path resolving outside the workspace root is rejected instantly, raising a `ValueError`. This protects system directories (e.g., `/etc/passwd` or system files) from arbitrary reading or overwriting.
+
+### 3. User Secrets & API Keys Protection
+- **No Private Credentials Committed**: Orix never requires storing central developer keys. It relies entirely on standard user-level env keys (such as `OPENAI_API_KEY` or local Ollama endpoints).
+- **Sensitive Key Cleansing**: Before writing project memory cache or prompt caches, the `LocalMemoryStore` actively scrubs any dictionary fields or strings matching keys like `api_key`, `password`, `token`, or `credentials`.
+
+### 4. Malformed Response & Failure Isolation
+- **Schema Validation**: Model-generated structured payloads (e.g., JSON requirements or tool calls) are validated against exact schemas. Malformed structural outputs are rejected rather than parsed blindly.
+- **Subprocess Isolation**: All subprocess commands executed via the Toolbox run with `shell=False` to prevent shell injection vulnerabilities.

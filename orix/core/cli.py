@@ -310,7 +310,7 @@ def doctor():
     report = doc.run_diagnostics()
 
     scores = report["scores"]
-    issues = report["issues"]
+    findings = report["findings"]
 
     console.print("\n[bold green]⚕ Orix Project Health Diagnosis ⚕[/bold green]\n")
 
@@ -325,16 +325,13 @@ def doctor():
     console.print(table)
     console.print()
 
-    any_issues = False
-    for category, cat_issues in issues.items():
-        if cat_issues:
-            any_issues = True
-            console.print(f"[bold yellow]⚠️  {category} Opportunities:[/bold yellow]")
-            for issue in cat_issues:
-                console.print(f"  - {issue}")
-            console.print()
-
-    if not any_issues:
+    if findings:
+        console.print("[bold yellow]⚠️  Diagnostics Findings:[/bold yellow]")
+        for f in findings:
+            color = "red" if f["severity"] == "CRITICAL" else ("orange3" if f["severity"] == "HIGH" else "yellow")
+            console.print(f"  [[bold {color}]{f['severity']}[/bold {color}]] {f['category']}: {f['message']}")
+        console.print()
+    else:
         console.print("[bold green]✔ Excellent! No critical issues or security vulnerability patterns detected.[/bold green]\n")
 
     console.print(Panel(report["scoring_model"], title="Scoring Methodology Documentation", border_style="blue"))
@@ -395,6 +392,130 @@ def explain(target):
 
     except Exception as e:
         console.print(f"[bold red]Error explaining target:[/bold red] {str(e)}")
+
+
+@cli.group()
+def ai():
+    """Manage and query Orix's intelligence layer and models."""
+    pass
+
+
+@ai.command(name="models")
+def ai_models():
+    """Detect and list status of available AI models and local providers."""
+    from orix.core.ai_providers import OllamaProvider
+
+    ollama = OllamaProvider({"provider": "ollama"})
+    ollama_avail = "Available" if ollama.is_available() else "Unavailable / Not Running"
+
+    openai_avail = "Configured" if os.getenv("OPENAI_API_KEY") else "Not configured"
+    anthropic_avail = "Configured" if os.getenv("ANTHROPIC_API_KEY") else "Not configured"
+    gemini_avail = "Configured" if os.getenv("GEMINI_API_KEY") else "Not configured"
+    openrouter_avail = "Configured" if os.getenv("OPENROUTER_API_KEY") else "Not configured"
+
+    table = Table(title="Orix Intelligence Layer Providers", border_style="cyan")
+    table.add_column("Provider", style="cyan")
+    table.add_column("Status", justify="left")
+
+    table.add_row("Ollama (Local)", f"[green]{ollama_avail}[/green]" if "Available" in ollama_avail else f"[yellow]{ollama_avail}[/yellow]")
+    table.add_row("OpenAI (Cloud)", f"[green]{openai_avail}[/green]" if "Configured" in openai_avail else f"[yellow]{openai_avail}[/yellow]")
+    table.add_row("Anthropic (Cloud)", f"[green]{anthropic_avail}[/green]" if "Configured" in anthropic_avail else f"[yellow]{anthropic_avail}[/yellow]")
+    table.add_row("Gemini (Cloud)", f"[green]{gemini_avail}[/green]" if "Configured" in gemini_avail else f"[yellow]{gemini_avail}[/yellow]")
+    table.add_row("OpenRouter (Cloud)", f"[green]{openrouter_avail}[/green]" if "Configured" in openrouter_avail else f"[yellow]{openrouter_avail}[/yellow]")
+
+    console.print(table)
+
+
+@cli.group()
+def memory():
+    """Inspect and manage project-scoped memory store."""
+    pass
+
+
+@memory.command(name="list")
+def memory_list():
+    """List all categories and entries in project memory."""
+    from orix.core.memory import LocalMemoryStore
+    store = LocalMemoryStore()
+    data = store.get_all()
+
+    table = Table(title="Orix Project Memory Storage", border_style="magenta")
+    table.add_column("Category", style="cyan")
+    table.add_column("Size / Count", justify="right")
+
+    for key, val in data.items():
+        count = len(val) if isinstance(val, (list, dict)) else 1
+        table.add_row(key, str(count))
+
+    console.print(table)
+
+
+@memory.command(name="show")
+@click.argument("category", required=True)
+def memory_show(category):
+    """Show details of a specific memory category."""
+    from orix.core.memory import LocalMemoryStore
+    store = LocalMemoryStore()
+    data = store.query(category)
+
+    if data is None:
+        console.print(f"[bold red]Error:[/bold red] Category '{category}' not found in memory.")
+        return
+
+    console.print(f"\n[bold magenta]✦ Project Memory Category: {category} ✦[/bold magenta]\n")
+    console.print_json(data=data)
+
+
+@memory.command(name="remove")
+@click.argument("category", required=True)
+@click.option("--key", help="Specific nested key to remove within the category.")
+def memory_remove(category, key):
+    """Remove an entire memory category or a specific nested key."""
+    from orix.core.memory import LocalMemoryStore
+    store = LocalMemoryStore()
+
+    success = store.delete_key(category, key)
+    if success:
+        target = f"nested key '{key}' from category '{category}'" if key else f"category '{category}'"
+        console.print(f"[bold green]Success![/bold green] Removed {target} from project memory.")
+    else:
+        console.print(f"[bold red]Error:[/bold red] Failed to locate category or sub-key.")
+
+
+@cli.command(name="eval")
+def run_eval():
+    """Run the deterministic AI agent evaluation suite."""
+    from orix.core.eval import OrixEvaluationSuite
+
+    console.print("\n[bold green]📊 Orix Developer OS Agent Evaluation Suite 📊[/bold green]\n")
+    with console.status("[bold cyan]Running evaluations inside isolated sandboxes..."):
+        suite = OrixEvaluationSuite()
+        results = suite.run_evaluations()
+
+    table = Table(title="Agent Scorecard Metrics", border_style="cyan")
+    table.add_column("Task ID", style="cyan")
+    table.add_column("Evaluation Scenario")
+    table.add_column("Task Completion", justify="center")
+    table.add_column("Iterations", justify="right")
+    table.add_column("Approx Tokens", justify="right")
+    table.add_column("Notes")
+
+    total_completed = 0
+    for r in results:
+        status_str = "[green]PASS[/green]" if r["completed"] else "[red]FAIL[/red]"
+        if r["completed"]:
+            total_completed += 1
+        table.add_row(
+            r["id"],
+            r["name"],
+            status_str,
+            str(r["iterations"]),
+            str(r["tokens_approx"]),
+            r["notes"]
+        )
+
+    console.print(table)
+    console.print(f"\n[bold green]Final Evaluation Score: {total_completed}/{len(results)} Tasks Passed[/bold green]\n")
 
 
 @cli.command()
