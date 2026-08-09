@@ -3,7 +3,8 @@ import os
 import fnmatch
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
-from orix.core.vector_store import SimpleVectorStore
+from orix.core.keyword_store import KeywordIndexStore
+from orix.core.simple_vector_store import SimpleVectorStore
 
 try:
     from tree_sitter import Parser, Language  # optional
