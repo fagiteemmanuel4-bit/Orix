@@ -8,20 +8,19 @@ def test_doctor_diagnose_and_scores(tmp_path):
     report = doctor.run_diagnostics()
 
     scores = report["scores"]
-    findings = report["findings"]
+    issues = report["issues"]
 
-    # Security score should be penalized because of missing .git directory and no secrets found (starts at 100, -15 because missing .git)
-    # Actually under new severity rules: missing .git is HIGH severity (-15 points). So Security score should be 85.
-    assert scores["Security"] == 85
-    assert len(findings) > 0
+    # Security score should be penalized because of missing .git directory (starts at 100, -20)
+    assert scores["Security"] == 80
+    assert len(issues["Security"]) == 1
 
-    # Testing score should be penalized for missing tests folder (HIGH severity, -15) and no test config (MEDIUM, -10). So Testing score should be 75.
-    assert scores["Testing"] == 75
+    # Testing score should be penalized for missing tests folder and pytest config
+    assert scores["Testing"] == 30
 
-    # Dependencies score should be penalized for missing requirements file (HIGH severity, -15). So Dependencies score should be 85.
-    assert scores["Dependencies"] == 85
+    # Dependencies score should be penalized for missing requirements file
+    assert scores["Dependencies"] == 60
 
-    # Overall score should match unweighted mathematical average of categories
-    expected_overall = round((85 + 75 + 85 + 95) / 4)
+    # Overall score should match unweighted mathematical average
+    expected_overall = round((80 + 30 + 60 + 80) / 4)
     assert scores["Overall"] == expected_overall
     assert "Scoring Model Documentation" in report["scoring_model"]

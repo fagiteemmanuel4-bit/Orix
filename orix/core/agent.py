@@ -47,8 +47,7 @@ class AgentSession:
         initial_prompt: Optional[str] = None,
         dry_run: bool = False,
         force: bool = False,
-        retry_limit: int = 3,
-        ai_config: Optional[Dict[str, Any]] = None
+        retry_limit: int = 3
     ):
         self.root_path = Path(root_path).resolve()
         self.mode = mode if mode in VALID_MODES else "interactive"
@@ -67,7 +66,6 @@ class AgentSession:
         self.dry_run = dry_run
         self.force = force
         self.retry_limit = retry_limit
-        self.ai_config = ai_config or self.config.get_all()
         self._load_initial_state()
 
     def _load_initial_state(self):
@@ -204,22 +202,25 @@ class AgentSession:
         else:
             console.print(Panel("Invalid mode. Available modes: plan, interactive, force.", title="Mode Error", border_style="red"))
 
-    # --- Model-Driven Tool and Permissions Agentic Loop ---
+    # --- Improved Agent Loop: OBSERVE -> PLAN -> REQUEST PERMISSION -> ACT -> TEST -> OBSERVE RESULT -> FIX -> VERIFY ---
 
     def _agentic_loop(self, prompt: str):
         self.sandbox_state = "thinking"
         self._render_layout()
 
-        # Step 1: OBSERVE & PLAN
-        # Get target or planned actions
-        plan = self._generate_plan(prompt)
+        # Step 1: OBSERVE
+        observation = self._observe(prompt)
+
+        # Step 2: PLAN
+        plan = self._plan(observation, prompt)
 
         if self.mode == "plan":
-            console.print(Panel("Plan mode enabled: no commands or tools will be executed.", title="Plan Mode", border_style="yellow"))
+            console.print(Panel("Plan mode enabled: no changes will be executed.", title="Plan Mode", border_style="yellow"))
             self._display_thinking_panel(plan)
             self.sandbox_state = "idle"
             return
 
+        # Execute Loop
         success = False
         attempt = 1
 
@@ -227,138 +228,130 @@ class AgentSession:
             console.print(Panel(f"Execution Attempt {attempt} of {self.retry_limit}", title="Loop Executing", border_style="yellow"))
             self._display_thinking_panel(plan)
 
-            # Step 2: MODEL TOOL CHOICE DECISION
-            tool_calls = plan.get("tool_calls", [])
-            if not tool_calls:
-                console.print("[yellow]No tool calls generated. Task completed.[/yellow]")
-                success = True
+            # Step 3: REQUEST PERMISSION
+            approved = self._request_permission(plan)
+            if not approved:
+                console.print(Panel("Operation denied by user. Halting loop.", title="Permission Denied", border_style="red"))
                 break
 
-            step_success = True
-            for tc in tool_calls:
-                tool_name = tc["name"]
-                tool_args = tc["arguments"]
+            # Step 4: ACT
+            action_result = self._act(plan)
+            if not action_result.get("success"):
+                console.print(Panel(f"Action failed: {action_result.get('error')}", title="Action Failed", border_style="red"))
+                # Go to fix step
+                plan = self._fix(action_result)
+                attempt += 1
+                continue
 
-                # Step 3: REQUEST PERMISSION based on exact permission tier
-                tier = self.TOOL_TIERS.get(tool_name, "INTERACTIVE")
-                approved = self.permissions.request(
-                    action=f"Execute tool '{tool_name}'",
-                    details=f"Arguments: {json.dumps(tool_args)}",
-                    force=(self.mode == "force" or self.force),
-                    tool_tier=tier
-                )
+            # Step 5: TEST
+            test_res = self._test()
 
-                if not approved:
-                    console.print(Panel(f"Tool '{tool_name}' denied by user. Halting loop.", title="Permission Denied", border_style="red"))
-                    step_success = False
-                    break
-
-                # Step 4: ACT (actual tool call execution)
-                console.print(f"[cyan]Executing tool '{tool_name}' with args {json.dumps(tool_args)}...[/cyan]")
-                tool_result = self.toolbox.execute_tool(tool_name, tool_args)
-
-                # Step 5: OBSERVE RESULT / TEST
-                if not tool_result.get("success"):
-                    console.print(f"[bold red]Tool Execution Error:[/bold red] {tool_result.get('error', {}).get('message')}")
-                    step_success = False
-
-                    # Step 6: MODEL FAILURE ANALYSIS & FIX
-                    plan = self._repair_plan(tool_result, attempt)
-                    break
-                else:
-                    console.print(f"[green]Tool '{tool_name}' returned successful result.[/green]")
-
-            if step_success:
-                # Step 7: VERIFY
-                test_res = self.toolbox.execute_tool("run_test", {})
-                if test_res.get("success") and test_res["result"].get("exit_code") == 0:
-                    success = True
-                    break
-                else:
-                    console.print(Panel("Tests failed or verification checks failed.", title="Verification Failure", border_style="yellow"))
-                    plan = self._repair_plan(test_res, attempt)
-                    attempt += 1
+            # Step 6: OBSERVE RESULT
+            test_passed = self._observe_result(test_res)
+            if test_passed:
+                success = True
+                break
             else:
+                # Step 7: FIX
+                console.print(Panel("Test failures detected. Invoking FIX step...", title="Self-Correction", border_style="yellow"))
+                plan = self._fix(test_res)
                 attempt += 1
 
+        # Step 8: VERIFY
         self._verify(success)
         self.sandbox_state = "idle"
         self._render_layout()
 
-    def _generate_plan(self, prompt: str) -> Dict[str, Any]:
-        # If AI model is configured, call generate_structured_output
-        schema = {
-            "type": "object",
-            "properties": {
-                "steps": {"type": "array", "items": {"type": "string"}},
-                "tool_calls": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string"},
-                            "arguments": {"type": "object"}
-                        },
-                        "required": ["name", "arguments"]
-                    }
-                }
-            },
-            "required": ["steps", "tool_calls"]
-        }
-
-        if self.ai_config.get("api_key") or os.getenv("OPENAI_API_KEY") or self.ai_config.get("provider") == "ollama":
-            try:
-                provider = get_provider(self.ai_config)
-                return provider.generate_structured_output(prompt, schema)
-            except Exception:
-                pass
-
-        # Robust model-fallback agent reasoning
+    def _observe(self, prompt: str) -> Dict[str, Any]:
+        # Search workspace for matching code files
         search_res = self.toolbox.execute_tool("search", {"query": prompt})
         files = search_res.get("result", [])
+        return {
+            "query": prompt,
+            "relevant_files": files,
+            "system_info": {
+                "cwd": str(self.root_path),
+                "mode": self.mode
+            }
+        }
+
+    def _plan(self, observation: Dict[str, Any], prompt: str) -> Dict[str, Any]:
+        files = observation.get("relevant_files", [])
         target_file = files[0] if files else "new_file.py"
 
-        tool_calls = []
-        if "read" in prompt.lower() and files:
-            tool_calls.append({"name": "read_file", "arguments": {"filepath": target_file}})
-        elif "write" in prompt.lower() or "add" in prompt.lower() or "create" in prompt.lower():
-            tool_calls.append({
-                "name": "write_file",
-                "arguments": {
-                    "filepath": target_file,
-                    "content": f"# Orix Agent: autonomous model-driven edit\n# For prompt: {prompt}\n"
-                }
-            })
-        else:
-            # Fallback tool call search
-            tool_calls.append({"name": "search", "arguments": {"query": prompt}})
-
         return {
+            "prompt": prompt,
+            "target_file": target_file,
+            "action_type": "write_file",
+            "proposed_changes": f"# Orix Agent: implementation of prompt: {prompt}\n",
             "steps": [
-                "Scan repository layout using semantic search",
-                f"Invoke tool sequence targets on file '{target_file}'",
-                "Execute local tests to verify changes"
+                f"Observe project environment (Relevant files: {', '.join(files[:3]) if files else 'none'})",
+                f"Apply target modification on '{target_file}'",
+                "Execute workspace test suites",
+                "Verify correctness and correct if necessary"
             ],
-            "tool_calls": tool_calls,
             "examples": self._collect_relevant_memory(prompt)
         }
 
-    def _repair_plan(self, failure_result: Dict[str, Any], attempt: int) -> Dict[str, Any]:
-        err_msg = failure_result.get("error", {}).get("message") or "unknown execution verification failure"
+    def _request_permission(self, plan: Dict[str, Any]) -> bool:
+        if self.mode == "force" or self.force:
+            return True
+        target = plan.get("target_file", "workspace")
+        action = plan.get("action_type", "modification")
+        return self.permissions.request(
+            f"{action} on {target}",
+            f"Agent proposes '{action}' to implement technical solution."
+        )
+
+    def _act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+        self.sandbox_state = "executing"
+        target_file = plan["target_file"]
+        proposed = plan["proposed_changes"]
+
+        # Safe read existing content to preserve or append
+        existing = ""
+        try:
+            read_res = self.toolbox.execute_tool("read_file", {"filepath": target_file})
+            if read_res.get("success"):
+                existing = read_res["result"]
+        except Exception:
+            pass
+
+        full_content = existing + "\n" + proposed if existing else proposed
+
+        # Execute tool write_file
+        res = self.toolbox.execute_tool("write_file", {
+            "filepath": target_file,
+            "content": full_content
+        })
+        return res
+
+    def _test(self) -> Dict[str, Any]:
+        # Execute run_test tool
+        res = self.toolbox.execute_tool("run_test", {})
+        return res
+
+    def _observe_result(self, test_res: Dict[str, Any]) -> bool:
+        if not test_res.get("success"):
+            return False
+        res_data = test_res.get("result", {})
+        exit_code = res_data.get("exit_code", 1)
+        return exit_code == 0
+
+    def _fix(self, failure_details: Dict[str, Any]) -> Dict[str, Any]:
+        err_msg = failure_details.get("error", {}).get("message") or failure_details.get("result", {}).get("stderr") or "unknown execution failure"
+        self.memory.record_exception(str(err_msg), "Agent session failed a step and initiated fix sequence.")
+
+        # Produce a corrected plan
         return {
+            "prompt": "Fix previous execution failure",
+            "target_file": "agent_session_fix.py",
+            "action_type": "write_file",
+            "proposed_changes": f"# Orix Agent: Auto-fix attempt for error: {err_msg[:60]}\n",
             "steps": [
-                f"Analyze previous execution failure: {err_msg[:60]}",
-                "Formulate safe repair payload",
-                "Execute workspace repair"
-            ],
-            "tool_calls": [
-                {
-                    "name": "write_file",
-                    "arguments": {
-                        "filepath": f"repair_attempt_{attempt}.py",
-                        "content": f"# Orix Agent loop repair block\n# Exception analyzed: {err_msg}\n"
-                    }
-                }
+                "Re-analyze files",
+                "Apply correction payload",
+                "Re-run test suite"
             ],
             "examples": []
         }
@@ -371,7 +364,7 @@ class AgentSession:
             console.print(Panel("✖ Session terminated. All retry attempts failed or permission denied.", title="Verification", border_style="red"))
             self.memory.append_history("Agent session terminated with unresolved failures.")
 
-    # --- Helpers ---
+    # --- Backwards Compatibility & Helpers ---
 
     def _display_thinking_panel(self, plan: Dict[str, Any]):
         checklist = Table.grid(padding=(0,1))

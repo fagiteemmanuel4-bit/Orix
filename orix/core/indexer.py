@@ -16,7 +16,7 @@ class WorkspaceIndexer:
 
     def __init__(self, root_path: str, storage_dir: Optional[str] = None):
         self.root_path = Path(root_path).resolve()
-        self.store = KeywordIndexStore(storage_dir)
+        self.store = SimpleVectorStore(storage_dir)
 
     def list_files_to_index(self) -> List[Path]:
         return [p for p in self.root_path.rglob("*") if p.is_file() and p.suffix in self.CODE_EXTENSIONS]
