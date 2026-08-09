@@ -17,11 +17,25 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 PLUGINS_DIR = os.path.join(BASE_DIR, "plugins")
 
-@click.group(invoke_without_command=True)
+class OrixCLI(click.Group):
+    def main(self, *args, **kwargs):
+        try:
+            return super().main(*args, **kwargs)
+        except Exception as e:
+            debug = "--debug" in sys.argv
+            if debug:
+                raise e
+            else:
+                from orix.core.ui import console
+                console.print(f"\n[bold red]✖ Operational Error:[/bold red] {str(e)}")
+                sys.exit(1)
+
+@click.group(invoke_without_command=True, cls=OrixCLI)
 @click.option("--config", is_flag=True, help="Open interactive config editor and exit.")
+@click.option("--debug", is_flag=True, help="Enable verbose debug logs and python tracebacks on failure.")
 @click.version_option(version="3.1.0", prog_name="orix")
 @click.pass_context
-def cli(ctx, config):
+def cli(ctx, config, debug):
     """Orix X: Universal Dev CLI — think git/npm/gh for app scaffolding."""
     if config:
         from orix.core.config_tui import run_config_tui

@@ -446,7 +446,14 @@ class MockProvider(AIProvider):
 
 
 def get_provider(config: Dict[str, Any]) -> AIProvider:
-    provider_name = config.get("provider", "openai").lower()
+    model_name = config.get("model", "")
+    provider_name = config.get("provider", "").lower()
+
+    # Derive provider from MODEL_REGISTRY if not explicitly specified
+    if not provider_name and model_name in MODEL_REGISTRY:
+        provider_name = MODEL_REGISTRY[model_name]["provider"]
+    if not provider_name:
+        provider_name = "openai"
 
     # Read keys from environment
     if not config.get("api_key"):
@@ -459,7 +466,7 @@ def get_provider(config: Dict[str, Any]) -> AIProvider:
         elif provider_name == "openrouter":
             config["api_key"] = os.getenv("OPENROUTER_API_KEY", "")
 
-    if config.get("provider") == "mock":
+    if provider_name == "mock" or config.get("provider") == "mock":
         return MockProvider(config)
     elif provider_name == "openai":
         return OpenAIProvider(config)
@@ -474,4 +481,5 @@ def get_provider(config: Dict[str, Any]) -> AIProvider:
     elif provider_name == "openai-compatible":
         return OpenAICompatibleProvider(config)
     else:
-        raise ValueError(f"Unknown AI provider: {provider_name}")
+        # Graceful fallback to OpenAICompatibleProvider for unknown custom providers
+        return OpenAICompatibleProvider(config)

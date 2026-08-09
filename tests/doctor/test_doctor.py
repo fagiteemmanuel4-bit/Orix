@@ -25,3 +25,15 @@ def test_doctor_diagnose_and_scores(tmp_path):
     expected_overall = round((85 + 75 + 85 + 95) / 4)
     assert scores["Overall"] == expected_overall
     assert "Scoring Model Documentation" in report["scoring_model"]
+
+def test_doctor_critical_security_override(tmp_path):
+    # Setup files with a simulated committed secret key to trigger CRITICAL override
+    (tmp_path / "app.py").write_text("api_key = 'sk-1234567890abcdef'\n", encoding="utf-8")
+
+    doctor = OrixDoctor(str(tmp_path))
+    report = doctor.run_diagnostics()
+
+    scores = report["scores"]
+    # Check that any CRITICAL security finding drops Security and Overall health index directly to 0
+    assert scores["Security"] == 0
+    assert scores["Overall"] == 0

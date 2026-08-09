@@ -150,6 +150,13 @@ class OrixDoctor:
         overall_score = round(sum(scores.values()) / len(scores))
         scores["Overall"] = overall_score
 
+        # Critical override safeguard (Phase 18)
+        # If any CRITICAL finding is detected (such as committed API keys), we override and drop the scores to 0
+        has_critical = any(f["severity"] == "CRITICAL" for f in findings)
+        if has_critical:
+            scores["Security"] = 0
+            scores["Overall"] = 0
+
         return {
             "scores": scores,
             "findings": findings,
@@ -157,7 +164,7 @@ class OrixDoctor:
                 "Scoring Model Documentation (Evidence-Driven Rules):\n"
                 "  - Base Score starts at 100 per category.\n"
                 "  - Deductions applied dynamically for each identified finding:\n"
-                "    * CRITICAL findings: -30 points (e.g. hardcoded secrets)\n"
+                "    * CRITICAL findings: -30 points (e.g. hardcoded secrets). OVERRIDES Security and Overall to 0.\n"
                 "    * HIGH findings: -15 points (e.g. missing Git, missing tests directory, unsafe eval/exec execution)\n"
                 "    * MEDIUM findings: -10 points (e.g. missing lock files, missing pytest/jest configs)\n"
                 "    * LOW findings: -5 points (e.g. missing .orix specifications directory, monolithic root files layout)\n"

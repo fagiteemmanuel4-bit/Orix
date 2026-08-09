@@ -34,8 +34,13 @@ class ConfigManager:
                 self._mtime = self.source.stat().st_mtime
                 merged = {**DEFAULT_CONFIG, **data}
                 return merged
-            except Exception:
-                return DEFAULT_CONFIG.copy()
+            except Exception as e:
+                # If there's a syntax error or decoding error, raise descriptive error
+                raise ValueError(
+                    f"Configuration file at '{self.source}' is corrupted or has invalid TOML syntax.\n"
+                    f"Details: {str(e)}\n"
+                    "What to do next: Verify the file syntax, fix invalid keys/values, or delete the file to restore defaults."
+                )
         return DEFAULT_CONFIG.copy()
 
     def reload_if_needed(self) -> Dict[str, Any]:

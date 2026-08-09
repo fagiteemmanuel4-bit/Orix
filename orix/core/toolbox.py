@@ -176,14 +176,28 @@ class WorkspaceToolbox:
         self.auto_approve = auto_approve
 
     def resolve_path(self, relative_path: str) -> Path:
-        path = Path(relative_path)
+        # Standardize separator variations (Windows style backslashes)
+        clean_path_str = str(relative_path).replace("\\", "/")
+        path = Path(clean_path_str)
+
         if not path.is_absolute():
             path = self.root_path / path
-        resolved = path.resolve()
+
+        # Try fully resolving the path to handle symlinks and double-dots
         try:
-            resolved.relative_to(self.root_path)
-        except ValueError:
+            resolved = path.resolve()
+        except Exception:
+            # Handle non-existent paths gracefully: resolve parent folder recursively
+            parent_resolved = path.parent.resolve()
+            resolved = parent_resolved / path.name
+
+        # Prevent case-insensitive variation escapes and absolute path breaks
+        resolved_str = str(resolved).lower().replace("\\", "/")
+        root_str = str(self.root_path).lower().replace("\\", "/")
+
+        if resolved_str != root_str and not resolved_str.startswith(root_str + "/"):
             raise ValueError(f"Path traversal detected: '{relative_path}' is outside workspace boundary '{self.root_path}'")
+
         return resolved
 
     def validate_args(self, tool_name: str, args: Dict[str, Any]) -> None:
