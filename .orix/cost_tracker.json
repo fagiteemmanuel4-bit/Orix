@@ -1,0 +1,38 @@
+[
+  {
+    "provider": "mock",
+    "model": "mock-model",
+    "input_tokens": 1,
+    "output_tokens": 5,
+    "input_cost": 0.0,
+    "output_cost": 0.0,
+    "total_cost": 0.0
+  },
+  {
+    "provider": "mock",
+    "model": "mock-model",
+    "input_tokens": 4,
+    "output_tokens": 18,
+    "input_cost": 0.0,
+    "output_cost": 0.0,
+    "total_cost": 0.0
+  },
+  {
+    "provider": "mock",
+    "model": "mock-model",
+    "input_tokens": 1,
+    "output_tokens": 5,
+    "input_cost": 0.0,
+    "output_cost": 0.0,
+    "total_cost": 0.0
+  },
+  {
+    "provider": "mock",
+    "model": "mock-model",
+    "input_tokens": 1,
+    "output_tokens": 5,
+    "input_cost": 0.0,
+    "output_cost": 0.0,
+    "total_cost": 0.0
+  }
+]

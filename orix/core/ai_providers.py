@@ -80,6 +80,35 @@ class AIProvider:
         # Backward-compatible convenience wrapper
         return self.generate([{"role": "user", "content": prompt}])
 
+    def _get_resolved_model(self) -> str:
+        pname = self.config.get("provider", "openai").lower()
+        if pname == "mock":
+            return "mock-model"
+        if pname == "openai":
+            return self.model or "gpt-4o-mini"
+        if pname == "anthropic":
+            return self.model or "claude-3-5-sonnet-20241022"
+        if pname == "gemini":
+            return self.model or "gemini-1.5-flash"
+        if pname == "ollama":
+            return self.model or "llama3"
+        return self.model or "unknown-model"
+
+    def post_generate_log(self, messages: List[Dict[str, str]], response: str):
+        from orix.core.token_utils import count_tokens
+        from orix.core.cost_tracker import CostTracker
+
+        provider_name = self.config.get("provider", "openai")
+        model_name = self._get_resolved_model()
+
+        # Concat all messages for prompt text
+        prompt_text = "\n".join([m.get("content", "") for m in messages])
+        in_tokens = count_tokens(prompt_text)
+        out_tokens = count_tokens(response)
+
+        tracker = CostTracker(self.config.get("workspace_root", os.getcwd()))
+        tracker.log_transaction(provider_name, model_name, in_tokens, out_tokens)
+
     def generate_structured_output(self, prompt: str, schema: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         # Clean helper for JSON outputs with optional validation
         resp_text = self.generate([{"role": "user", "content": prompt}])
@@ -128,7 +157,9 @@ class OpenAIProvider(AIProvider):
         }
         resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
         resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        res_text = resp.json()["choices"][0]["message"]["content"]
+        self.post_generate_log(messages, res_text)
+        return res_text
 
     def stream(self, messages: List[Dict[str, str]], **options) -> Generator[str, None, None]:
         url = self.endpoint or "https://api.openai.com/v1/chat/completions"
@@ -145,6 +176,7 @@ class OpenAIProvider(AIProvider):
         }
         resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout, stream=True)
         resp.raise_for_status()
+        accumulated = []
         for line in resp.iter_lines():
             if line:
                 decoded = line.decode("utf-8").strip()
@@ -156,9 +188,11 @@ class OpenAIProvider(AIProvider):
                         chunk = json.loads(data_str)
                         delta = chunk["choices"][0]["delta"].get("content", "")
                         if delta:
+                            accumulated.append(delta)
                             yield delta
                     except Exception:
                         pass
+        self.post_generate_log(messages, "".join(accumulated))
 
     def generate_with_tools(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]], **options) -> Dict[str, Any]:
         url = self.endpoint or "https://api.openai.com/v1/chat/completions"
@@ -194,8 +228,10 @@ class OpenAIProvider(AIProvider):
                     "name": tc["function"]["name"],
                     "arguments": json.loads(tc["function"]["arguments"])
                 })
+        res_text = msg.get("content", "")
+        self.post_generate_log(messages, res_text + json.dumps(tool_calls))
         return {
-            "content": msg.get("content", ""),
+            "content": res_text,
             "tool_calls": tool_calls
         }
 
@@ -222,11 +258,13 @@ class AnthropicProvider(AIProvider):
         }
         resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
         resp.raise_for_status()
-        return resp.json()["content"][0]["text"]
+        res_text = resp.json()["content"][0]["text"]
+        self.post_generate_log(messages, res_text)
+        return res_text
 
     def stream(self, messages: List[Dict[str, str]], **options) -> Generator[str, None, None]:
-        # Anthropic streaming fallback
-        yield self.generate(messages, **options)
+        res_text = self.generate(messages, **options)
+        yield res_text
 
     def generate_with_tools(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]], **options) -> Dict[str, Any]:
         # Convert schemas to Anthropic style
@@ -264,6 +302,7 @@ class AnthropicProvider(AIProvider):
                     "name": content_block["name"],
                     "arguments": content_block["input"]
                 })
+        self.post_generate_log(messages, content + json.dumps(tool_calls))
         return {
             "content": content,
             "tool_calls": tool_calls
@@ -295,14 +334,17 @@ class GeminiProvider(AIProvider):
         }
         resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
         resp.raise_for_status()
-        return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        res_text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        self.post_generate_log(messages, res_text)
+        return res_text
 
     def stream(self, messages: List[Dict[str, str]], **options) -> Generator[str, None, None]:
-        yield self.generate(messages, **options)
+        res_text = self.generate(messages, **options)
+        yield res_text
 
     def generate_with_tools(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]], **options) -> Dict[str, Any]:
-        # Simple tools fallback via text mapping
-        return {"content": self.generate(messages), "tool_calls": []}
+        res_text = self.generate(messages)
+        return {"content": res_text, "tool_calls": []}
 
 
 class OpenRouterProvider(AIProvider):
@@ -326,13 +368,17 @@ class OpenRouterProvider(AIProvider):
         }
         resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
         resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        res_text = resp.json()["choices"][0]["message"]["content"]
+        self.post_generate_log(messages, res_text)
+        return res_text
 
     def stream(self, messages: List[Dict[str, str]], **options) -> Generator[str, None, None]:
-        yield self.generate(messages, **options)
+        res_text = self.generate(messages, **options)
+        yield res_text
 
     def generate_with_tools(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]], **options) -> Dict[str, Any]:
-        return {"content": self.generate(messages), "tool_calls": []}
+        res_text = self.generate(messages)
+        return {"content": res_text, "tool_calls": []}
 
 
 class OllamaProvider(AIProvider):
@@ -364,13 +410,17 @@ class OllamaProvider(AIProvider):
         }
         resp = requests.post(url, json=payload, timeout=self.timeout)
         resp.raise_for_status()
-        return resp.json()["response"]
+        res_text = resp.json()["response"]
+        self.post_generate_log(messages, res_text)
+        return res_text
 
     def stream(self, messages: List[Dict[str, str]], **options) -> Generator[str, None, None]:
-        yield self.generate(messages, **options)
+        res_text = self.generate(messages, **options)
+        yield res_text
 
     def generate_with_tools(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]], **options) -> Dict[str, Any]:
-        return {"content": self.generate(messages), "tool_calls": []}
+        res_text = self.generate(messages)
+        return {"content": res_text, "tool_calls": []}
 
 
 class OpenAICompatibleProvider(AIProvider):
@@ -396,13 +446,17 @@ class OpenAICompatibleProvider(AIProvider):
         }
         resp = requests.post(self.endpoint, headers=headers, json=payload, timeout=self.timeout)
         resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        res_text = resp.json()["choices"][0]["message"]["content"]
+        self.post_generate_log(messages, res_text)
+        return res_text
 
     def stream(self, messages: List[Dict[str, str]], **options) -> Generator[str, None, None]:
-        yield self.generate(messages, **options)
+        res_text = self.generate(messages, **options)
+        yield res_text
 
     def generate_with_tools(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]], **options) -> Dict[str, Any]:
-        return {"content": self.generate(messages), "tool_calls": []}
+        res_text = self.generate(messages)
+        return {"content": res_text, "tool_calls": []}
 
 
 # --- MOCK PROVIDER FOR DETERMINISTIC OFFLINE TESTING ---
@@ -425,24 +479,97 @@ class MockProvider(AIProvider):
 
         prompt = messages[-1]["content"] if messages else ""
         if "failing test" in prompt.lower() or "test_runner.py" in prompt.lower():
-            return '{"steps": ["Check assertions"], "tool_calls": [{"name": "write_file", "arguments": {"filepath": "test_runner.py", "content": "def test_assert():\\n    assert True\\n"}}]}'
-        if "endpoint" in prompt.lower() or "app.py" in prompt.lower():
-            return '{"steps": ["Add health endpoint"], "tool_calls": [{"name": "write_file", "arguments": {"filepath": "app.py", "content": "class API:\\n    @property\\n    def health(self): return True\\n"}}]}'
-        if "math" in prompt.lower() or "refactor" in prompt.lower():
-            return '{"steps": ["Refactor math_utils.py"], "tool_calls": [{"name": "write_file", "arguments": {"filepath": "math_utils.py", "content": "def calc_sum(): return 1 + 2\\n"}}]}'
-        if "buggy.py" in prompt.lower():
-            return '{"steps": ["Fix buggy syntax"], "tool_calls": [{"name": "write_file", "arguments": {"filepath": "buggy.py", "content": "def run_code():\\n    print(\'bug\')\\n"}}]}'
+            response = '{"steps": ["Check assertions"], "tool_calls": [{"name": "write_file", "arguments": {"filepath": "test_runner.py", "content": "def test_assert():\\n    assert True\\n"}}]}'
+        elif "endpoint" in prompt.lower() or "app.py" in prompt.lower():
+            response = '{"steps": ["Add health endpoint"], "tool_calls": [{"name": "write_file", "arguments": {"filepath": "app.py", "content": "class API:\\n    @property\\n    def health(self): return True\\n"}}]}'
+        elif "math" in prompt.lower() or "refactor" in prompt.lower():
+            response = '{"steps": ["Refactor math_utils.py"], "tool_calls": [{"name": "write_file", "arguments": {"filepath": "math_utils.py", "content": "def calc_sum(): return 1 + 2\\n"}}]}'
+        elif "buggy.py" in prompt.lower():
+            response = '{"steps": ["Fix buggy syntax"], "tool_calls": [{"name": "write_file", "arguments": {"filepath": "buggy.py", "content": "def run_code():\\n    print(\'bug\')\\n"}}]}'
+        else:
+            response = '{"steps": ["Scanned directory"], "tool_calls": []}'
 
-        return '{"steps": ["Scanned directory"], "tool_calls": []}'
+        self.post_generate_log(messages, response)
+        return response
 
     def stream(self, messages: List[Dict[str, str]], **options) -> Generator[str, None, None]:
-        yield self.generate(messages, **options)
+        res_text = self.generate(messages, **options)
+        yield res_text
 
     def generate_with_tools(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]], **options) -> Dict[str, Any]:
+        response = "Mock text content"
+        self.post_generate_log(messages, response)
         return {
-            "content": "Mock text content",
+            "content": response,
             "tool_calls": []
         }
+
+
+# --- FAILOVER & HYBRID DYNAMIC ROUTING ADAPTERS ---
+
+class RoutingProvider(AIProvider):
+    def __init__(self, target_provider: AIProvider, fallback_provider: Optional[AIProvider] = None):
+        super().__init__(target_provider.config)
+        self.target = target_provider
+        self.fallback = fallback_provider or OllamaProvider({"provider": "ollama", "model": "llama3"})
+
+    def validate_connection(self) -> bool:
+        return self.target.validate_connection()
+
+    def list_models(self) -> List[str]:
+        return self.target.list_models()
+
+    def generate(self, messages: List[Dict[str, str]], **options) -> str:
+        try:
+            return self.target.generate(messages, **options)
+        except Exception as e:
+            # Check if local fallback is available and route
+            if self.fallback.validate_connection():
+                from rich.console import Console
+                Console().print(f"\n[bold yellow]⚠️  Remote provider failure: {e}. Falling back to Local Ollama model (llama3)...[/bold yellow]\n")
+                return self.fallback.generate(messages, **options)
+            raise e
+
+    def stream(self, messages: List[Dict[str, str]], **options) -> Generator[str, None, None]:
+        try:
+            yield from self.target.stream(messages, **options)
+        except Exception as e:
+            if self.fallback.validate_connection():
+                from rich.console import Console
+                Console().print(f"\n[bold yellow]⚠️  Remote provider failure: {e}. Falling back to Local Ollama model (llama3)...[/bold yellow]\n")
+                yield from self.fallback.stream(messages, **options)
+            else:
+                raise e
+
+    def generate_with_tools(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]], **options) -> Dict[str, Any]:
+        try:
+            return self.target.generate_with_tools(messages, tools, **options)
+        except Exception as e:
+            if self.fallback.validate_connection():
+                from rich.console import Console
+                Console().print(f"\n[bold yellow]⚠️  Remote provider failure: {e}. Falling back to Local Ollama...[/bold yellow]\n")
+                return self.fallback.generate_with_tools(messages, tools, **options)
+            raise e
+
+
+def route_task(prompt: str, ai_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Dynamically route task to cheap vs reasoning models based on complexity.
+
+    - Complexity-focused keywords ('architect', 'refactor', 'design') route to claude-3-5-sonnet.
+    - Coding/Syntactic keywords route to gpt-4o-mini.
+    - Fallback defaults to gpt-4o-mini or configured provider.
+    """
+    config_copy = ai_config.copy()
+    prompt_lower = prompt.lower()
+
+    if any(k in prompt_lower for k in ["architect", "design", "refactor structure", "security"]):
+        config_copy["provider"] = "anthropic"
+        config_copy["model"] = "claude-3-5-sonnet-20241022"
+    elif any(k in prompt_lower for k in ["write", "syntax", "add test", "mock", "fix"]):
+        config_copy["provider"] = "openai"
+        config_copy["model"] = "gpt-4o-mini"
+
+    return config_copy
 
 
 def get_provider(config: Dict[str, Any]) -> AIProvider:
@@ -460,18 +587,23 @@ def get_provider(config: Dict[str, Any]) -> AIProvider:
             config["api_key"] = os.getenv("OPENROUTER_API_KEY", "")
 
     if config.get("provider") == "mock":
-        return MockProvider(config)
+        raw_provider = MockProvider(config)
     elif provider_name == "openai":
-        return OpenAIProvider(config)
+        raw_provider = OpenAIProvider(config)
     elif provider_name == "anthropic":
-        return AnthropicProvider(config)
+        raw_provider = AnthropicProvider(config)
     elif provider_name == "gemini":
-        return GeminiProvider(config)
+        raw_provider = GeminiProvider(config)
     elif provider_name == "openrouter":
-        return OpenRouterProvider(config)
+        raw_provider = OpenRouterProvider(config)
     elif provider_name == "ollama":
-        return OllamaProvider(config)
+        raw_provider = OllamaProvider(config)
     elif provider_name == "openai-compatible":
-        return OpenAICompatibleProvider(config)
+        raw_provider = OpenAICompatibleProvider(config)
     else:
         raise ValueError(f"Unknown AI provider: {provider_name}")
+
+    # Wrap remote cloud providers in RoutingProvider fallback handler
+    if provider_name not in ("mock", "ollama"):
+        return RoutingProvider(raw_provider)
+    return raw_provider
