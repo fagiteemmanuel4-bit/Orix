@@ -27,6 +27,51 @@ class OrixExplain:
         else:
             return self._explain_file(resolved)
 
+    def explain_symbol(self, symbol_name: str) -> Dict[str, Any]:
+        from orix.core.indexer import WorkspaceIndexer
+        indexer = WorkspaceIndexer(str(self.root))
+
+        # If index is empty or belongs to another workspace, rebuild it
+        chunks = indexer.store.index.get("chunks", [])
+        if not chunks or not any(c.get("path", "").startswith(str(self.root)) for c in chunks):
+            files = indexer.list_files_to_index()
+            indexer.index_workspace(files)
+            chunks = indexer.store.index.get("chunks", [])
+
+        matching_chunks = []
+        for c in chunks:
+            meta = c.get("metadata", {})
+            if meta.get("name", "").lower() == symbol_name.lower():
+                matching_chunks.append(c)
+
+        if not matching_chunks:
+            # Fallback substring query
+            for c in chunks:
+                meta = c.get("metadata", {})
+                if symbol_name.lower() in meta.get("name", "").lower():
+                    matching_chunks.append(c)
+
+        if not matching_chunks:
+            raise ValueError(f"Symbol '{symbol_name}' not found in the indexed workspace.")
+
+        best = matching_chunks[0]
+        meta = best.get("metadata", {})
+
+        # Parse text logic
+        purpose = f"Code definition block for {meta.get('type', 'symbol')} '{meta.get('name')}'"
+
+        return {
+            "type": "symbol",
+            "name": meta.get("name", symbol_name),
+            "symbol_type": meta.get("type", "unknown"),
+            "path": str(Path(best["path"]).relative_to(self.root)),
+            "purpose": purpose,
+            "text": best["text"],
+            "dependencies": meta.get("imports", []),
+            "execution_flow": f"Part of module '{Path(best['path']).name}' logic.",
+            "risks": ["Check file definition block structure for correctness."]
+        }
+
     def _explain_file(self, path: Path) -> Dict[str, Any]:
         # Handle potential binary file check
         try:

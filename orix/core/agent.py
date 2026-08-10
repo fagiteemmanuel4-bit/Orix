@@ -286,6 +286,16 @@ class AgentSession:
         self._render_layout()
 
     def _generate_plan(self, prompt: str) -> Dict[str, Any]:
+        from orix.core.ai_providers import route_task
+
+        # Determine active config (respect explicit user override in config)
+        if self.config.get("disable_routing", False):
+            active_config = self.ai_config
+        else:
+            active_config = route_task(prompt, self.ai_config)
+            if active_config.get("model") != self.ai_config.get("model"):
+                console.print(f"[bold yellow]🔀 Dynamic Task Routing: Automatically routing to model {active_config.get('model')} based on task characteristics.[/bold yellow]")
+
         # If AI model is configured, call generate_structured_output
         schema = {
             "type": "object",
@@ -306,9 +316,9 @@ class AgentSession:
             "required": ["steps", "tool_calls"]
         }
 
-        if self.ai_config.get("api_key") or os.getenv("OPENAI_API_KEY") or self.ai_config.get("provider") == "ollama":
+        if active_config.get("api_key") or os.getenv("OPENAI_API_KEY") or active_config.get("provider") in ("ollama", "mock"):
             try:
-                provider = get_provider(self.ai_config)
+                provider = get_provider(active_config)
                 return provider.generate_structured_output(prompt, schema)
             except Exception:
                 pass

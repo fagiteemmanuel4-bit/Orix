@@ -338,13 +338,38 @@ def doctor():
 
 
 @cli.command()
-@click.argument("target", type=click.Path(exists=True), required=True)
-def explain(target):
-    """Generate professional explanation of a file or directory based on source code analysis."""
+@click.argument("target", type=click.Path(exists=True), required=False)
+@click.option("--symbol", help="Explain a specific class or function symbol in the code.")
+def explain(target, symbol):
+    """Generate professional explanation of a file, directory, or symbol."""
     from orix.core.explain import OrixExplain
+    from rich.syntax import Syntax
 
     explainer = OrixExplain(os.getcwd())
     try:
+        if symbol:
+            report = explainer.explain_symbol(symbol)
+            console.print(f"\n[bold green]✦ Orix Code Explanation: Symbol '{symbol}' ✦[/bold green]\n")
+            console.print(f"[bold cyan]● Symbol Type:[/bold cyan] {report['symbol_type']}")
+            console.print(f"[bold cyan]● Defined In:[/bold cyan] {report['path']}")
+            console.print()
+            console.print(f"[bold cyan]● Purpose:[/bold cyan]\n  {report['purpose']}")
+            console.print()
+            console.print("[bold cyan]● Code Definition Block:[/bold cyan]")
+            console.print(Panel(Syntax(report['text'], "python", line_numbers=True, theme="monokai")))
+            console.print()
+            if report.get("dependencies"):
+                console.print("[bold cyan]● Dependencies & Imports:[/bold cyan]")
+                for dep in report["dependencies"]:
+                    console.print(f"  - {dep}")
+                console.print()
+            console.print(f"[bold cyan]● Execution Flow:[/bold cyan]\n  {report['execution_flow']}")
+            console.print()
+            return
+
+        if not target:
+            target = "."
+
         report = explainer.explain_path(target)
 
         console.print(f"\n[bold green]✦ Orix Code Explanation: {report['path']} ✦[/bold green]\n")
@@ -547,6 +572,60 @@ def self_test():
     else:
         console.print("\n[bold red]✖ RELEASE CANDIDATE REJECTED: Minor component errors detected. ✖[/bold red]\n")
         sys.exit(1)
+
+
+@cli.command()
+@click.option("--clear", is_flag=True, help="Clear all stored cost logs.")
+def cost(clear):
+    """Show detailed input/output tokens and cost estimates for AI providers."""
+    from orix.core.cost_tracker import CostTracker
+    tracker = CostTracker(os.getcwd())
+
+    if clear:
+        tracker.clear()
+        console.print("[bold green]Success![/bold green] Clear cost history complete.")
+        return
+
+    summary = tracker.get_summary()
+    transactions = summary["transactions"]
+
+    console.print("\n[bold green]💰 Orix Token & Cost intelligence Dashboard 💰[/bold green]\n")
+
+    if not transactions:
+        console.print("[yellow]No token usage recorded yet. Start an Orix Agent session or run Forge to log transactions.[/yellow]\n")
+        return
+
+    table = Table(title="Model Cost Breakdown (ESTIMATES)", border_style="cyan")
+    table.add_column("Provider", style="cyan")
+    table.add_column("Model")
+    table.add_column("Input (Tokens)", justify="right")
+    table.add_column("Output (Tokens)", justify="right")
+    table.add_column("Estimated Input Cost ($)", justify="right")
+    table.add_column("Estimated Output Cost ($)", justify="right")
+    table.add_column("Estimated Total Cost ($)", justify="right")
+
+    for t in transactions:
+        table.add_row(
+            t["provider"],
+            t["model"],
+            f"{t['input_tokens']:,}",
+            f"{t['output_tokens']:,}",
+            f"${t['input_cost']:.6f}",
+            f"${t['output_cost']:.6f}",
+            f"${t['total_cost']:.6f}"
+        )
+
+    console.print(table)
+    console.print()
+
+    summary_panel = (
+        f"[bold white]Summary of Project Session Tasks:[/bold white]\n"
+        f"  - Total API calls recorded: [cyan]{summary['transactions_count']}[/cyan]\n"
+        f"  - Cumulative Input Tokens: [cyan]{summary['total_input_tokens']:,}[/cyan]\n"
+        f"  - Cumulative Output Tokens: [cyan]{summary['total_output_tokens']:,}[/cyan]\n"
+        f"  - Total Accrued Cost estimate: [bold green]${summary['total_cost']:.6f}[/bold green]\n"
+    )
+    console.print(Panel(summary_panel, title="Intelligence Session Cost", border_style="green"))
 
 
 @cli.command()
